@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/Application/" />
+  <Folder Name="/Core/">
+    <Project Path="src/QuizArena.Domain/QuizArena.Domain.csproj" />
+  </Folder>
+  <Folder Name="/Infrastructure/">
+    <Project Path="src\QuizArena.Persistence\QuizArena.Persistence.csproj" Type="Classic C#" />
+  </Folder>
+  <Folder Name="/Presentation/" />
+</Solution>

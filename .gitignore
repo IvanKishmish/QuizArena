@@ -1,0 +1,55 @@
+# ==========================================
+# .NET / C#
+# ==========================================
+bin/
+obj/
+[Dd]ebug/
+[Dd]ebugPublic/
+[Dd]Release/
+[Dd]ReleasePublic/
+*.DotSettings.user
+
+# ASP.NET Core
+wwwroot/
+
+# Logs
+*.log
+**/logs/
+
+# ==========================================
+# IDEs, Editors & User-specific files
+# ==========================================
+.idea/
+*.sln.iml
+*.suo
+*.user
+*.userosscache
+*.sln.docattachments
+
+.vscode/
+!.vscode/extensions.json
+
+*.swp
+*.swo
+*~
+
+# ==========================================
+# Environment variables (Sensitive data)
+# ==========================================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*.local
+
+# ==========================================
+# Operating System files
+# ==========================================
+.DS_Store
+Thumbs.db
+desktop.ini
+*.cab
+*.msi
+*.msm
+*.msp
