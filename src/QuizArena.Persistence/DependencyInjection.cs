@@ -2,10 +2,12 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using MongoDB.Driver;
 using QuizArena.Application.Common.Interfaces;
 using QuizArena.Persistence.Context;
 using QuizArena.Persistence.Identity;
 using QuizArena.Persistence.Interceptors;
+using QuizArena.Persistence.Mongo;
 
 namespace QuizArena.Persistence;
 
@@ -15,7 +17,7 @@ public static class DependencyInjection
     {
         var connectionString = configuration.GetConnectionString("DB_CONNECTION_STRING");
 
-        services.AddSingleton<UpdateAuditableEntitiesInterceptor>();
+        services.AddScoped<UpdateAuditableEntitiesInterceptor>();
 
         services.AddDbContext<AppDbContext>((sp, options) =>
         {
@@ -38,6 +40,23 @@ public static class DependencyInjection
             })
             .AddEntityFrameworkStores<ApplicationIdentityDbContext>()
             .AddDefaultTokenProviders();
+        
+        services.AddScoped<IIdentityService, IdentityService>();
+        
+        services.AddSingleton<IMongoDatabase>(_ =>
+        {
+            var mongoConnectionString = configuration["Mongo:ConnectionString"] 
+                                        ?? throw new InvalidOperationException("Mongo connection string not found.");
+            var mongoDatabaseName = configuration["Mongo:DatabaseName"]
+                               ?? throw new InvalidOperationException("Mongo database name not found.");
+            
+            var client = new MongoClient(mongoConnectionString);
+            return client.GetDatabase(mongoDatabaseName);
+        });
+        
+        MongoClassMapConfiguration.Configure();
+        
+        services.AddSingleton<IQuestionStore, QuestionStore>();
 
         return services;
     }
