@@ -2,12 +2,16 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
+using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Driver;
 using QuizArena.Application.Common.Interfaces;
 using QuizArena.Persistence.Context;
 using QuizArena.Persistence.Identity;
 using QuizArena.Persistence.Interceptors;
 using QuizArena.Persistence.Mongo;
+using StackExchange.Redis;
 
 namespace QuizArena.Persistence;
 
@@ -43,6 +47,8 @@ public static class DependencyInjection
         
         services.AddScoped<IIdentityService, IdentityService>();
         
+        BsonSerializer.RegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
+        
         services.AddSingleton<IMongoDatabase>(_ =>
         {
             var mongoConnectionString = configuration["Mongo:ConnectionString"] 
@@ -50,13 +56,23 @@ public static class DependencyInjection
             var mongoDatabaseName = configuration["Mongo:DatabaseName"]
                                ?? throw new InvalidOperationException("Mongo database name not found.");
             
-            var client = new MongoClient(mongoConnectionString);
+            var clientSettings = MongoClientSettings.FromConnectionString(mongoConnectionString);
+
+            var client = new MongoClient(clientSettings);
             return client.GetDatabase(mongoDatabaseName);
         });
         
         MongoClassMapConfiguration.Configure();
         
         services.AddSingleton<IQuestionStore, QuestionStore>();
+
+        services.AddSingleton<IConnectionMultiplexer>(_ =>
+        {
+            var redisConnectionString = configuration["Redis:ConnectionString"]
+                ?? throw new InvalidOperationException("Redis connection string not found.");
+            
+            return ConnectionMultiplexer.Connect(redisConnectionString);
+        });
 
         return services;
     }
