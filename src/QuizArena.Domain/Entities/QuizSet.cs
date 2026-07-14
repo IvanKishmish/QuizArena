@@ -83,9 +83,6 @@
 
         public ErrorOr<Updated> Publish()
         {
-            if (_questions.Count == 0)
-                return Error.Validation("QuizSet.CannotPublishEmpty", "A quiz set must contain at least one question to be published.");
-
             Visibility = Visibility.Public;
 
             return Result.Updated;
