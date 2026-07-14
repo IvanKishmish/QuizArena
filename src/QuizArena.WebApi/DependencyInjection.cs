@@ -9,6 +9,7 @@ public static class DependencyInjection
     {
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
+        services.AddScoped<ITokenService, TokenService>();
 
         return services;
     }
