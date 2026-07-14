@@ -4,5 +4,5 @@ namespace QuizArena.Persistence.Identity;
 
 public sealed class ApplicationUser : IdentityUser<Guid>
 {
-    public DateTimeOffset RegisteredAt { get; private init; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset RegisteredAt { get; set; } = DateTimeOffset.UtcNow;
 }
