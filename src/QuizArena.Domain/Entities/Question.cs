@@ -42,6 +42,38 @@ public sealed class Question : Entity
         return new Question(Guid.CreateVersion7(), args);
     }
 
+    public int CalculateScore(IReadOnlyList<int> selectedOptionIndices, double elapsedSeconds)
+    {
+        var correctIndices = Options
+            .Select((o, i) => (o.IsCorrect, Index: i))
+            .Where(x => x.IsCorrect)
+            .Select(x => x.Index)
+            .ToHashSet();
+
+        var isCorrect = QuestionType switch
+        {
+            QuestionType.SingleChoice or QuestionType.TrueFalse =>
+                selectedOptionIndices.Count == 1 && correctIndices.Contains(selectedOptionIndices[0]),
+
+            QuestionType.MultipleChoice =>
+                selectedOptionIndices.ToHashSet().SetEquals(correctIndices),
+
+            QuestionType.Ordering =>
+                selectedOptionIndices
+                    .SequenceEqual(Options.OrderBy(o => o.OrderIndex).Select((_, i) => i)),
+
+            _ => false
+        };
+
+        if (!isCorrect)
+            return 0;
+        
+        var timeRatio = Math.Clamp(1 - elapsedSeconds / TimeLimitSeconds, 0, 1);
+        var speedBonus = Points / 2.0 * timeRatio;
+
+        return (int)Math.Round(Points / 2.0 + speedBonus);
+    }
+    
     private static ErrorOr<Success> ValidateInvariants(QuestionCreationParams args)
     {
         var errors = new List<Error>();

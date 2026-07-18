@@ -1,5 +1,3 @@
-using QuizArena.Domain.Enums;
-
 namespace QuizArena.Domain.Entities.Models;
 
 public sealed record QuizSetCreationParams(

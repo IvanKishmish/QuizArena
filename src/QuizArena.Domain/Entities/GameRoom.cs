@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using QuizArena.Domain.Common;
 using QuizArena.Domain.Entities.Models;
 using QuizArena.Domain.Enums;
@@ -17,6 +18,8 @@ public sealed class GameRoom : TransientEntity
     
     public int CurrentQuestionIndex { get; private set; }
     
+    public DateTimeOffset? CurrentQuestionStartedAt { get; private set; }
+    
     private readonly List<Participant> _participants = [];
     public IReadOnlyList<Participant> Participants => _participants.AsReadOnly();
     
@@ -32,6 +35,29 @@ public sealed class GameRoom : TransientEntity
         RoomCode = args.RoomCode;
         QuizSetId = args.QuizSetId;
         HostId = args.HostId;
+    }
+    
+    internal GameRoom(
+        Guid id,
+        string roomCode,
+        Guid quizSetId,
+        Guid hostId,
+        GameRoomStatus status,
+        int currentQuestionIndex,
+        DateTimeOffset? currentQuestionStartedAt,
+        List<Participant> participants,
+        DateTimeOffset? startedAt,
+        DateTimeOffset? finishedAt) : base(id)
+    {
+        RoomCode = roomCode;
+        QuizSetId = quizSetId;
+        HostId = hostId;
+        Status = status;
+        CurrentQuestionIndex = currentQuestionIndex;
+        CurrentQuestionStartedAt = currentQuestionStartedAt;
+        _participants = participants;
+        StartedAt = startedAt;
+        FinishedAt = finishedAt;
     }
 
     public static ErrorOr<GameRoom> Create(GameRoomCreationParams args)
@@ -87,6 +113,7 @@ public sealed class GameRoom : TransientEntity
             return Error.Validation("GameRoom.NotInProgress", "Cannot advance questions when the game is not in progress.");
         
         CurrentQuestionIndex++;
+        CurrentQuestionStartedAt = DateTimeOffset.UtcNow;
         
         return Result.Updated;
     }

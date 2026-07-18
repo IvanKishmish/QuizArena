@@ -23,6 +23,14 @@ public sealed class Participant : TransientEntity
         DisplayName = displayName;
     }
     
+    internal Participant(Guid id, string displayName, Guid? userId, Guid? guestId, int score) : base(id)
+    {
+        DisplayName = displayName;
+        UserId = userId;
+        GuestId = guestId;
+        Score = score;
+    }
+    
     public static ErrorOr<Participant> Create(Guid? userId, Guid? guestId, string displayName)
     {
         var errors = new List<Error>();
