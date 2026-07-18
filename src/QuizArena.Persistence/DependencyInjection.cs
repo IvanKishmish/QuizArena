@@ -7,10 +7,12 @@ using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Driver;
 using QuizArena.Application.Common.Interfaces;
+using QuizArena.Application.Common.Interfaces.Leaderboard;
 using QuizArena.Persistence.Context;
 using QuizArena.Persistence.Identity;
 using QuizArena.Persistence.Interceptors;
 using QuizArena.Persistence.Mongo;
+using QuizArena.Persistence.Redis;
 using StackExchange.Redis;
 
 namespace QuizArena.Persistence;
@@ -73,6 +75,10 @@ public static class DependencyInjection
             
             return ConnectionMultiplexer.Connect(redisConnectionString);
         });
+        
+        services.AddSingleton<IGameRoomStore, GameRoomStore>();
+        services.AddScoped<IRoomCodeGenerator, RoomCodeGenerator>();
+        services.AddScoped<ILeaderboardStore, LeaderboardStore>();
 
         return services;
     }

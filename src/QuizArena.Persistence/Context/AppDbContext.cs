@@ -8,6 +8,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 {
     public DbSet<QuizSet> QuizSets => Set<QuizSet>();
     public DbSet<Player> Players => Set<Player>();
+    public DbSet<GameHistoryEntry> GameHistory => Set<GameHistoryEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using QuizArena.Application.Common.Interfaces;
 using QuizArena.Domain.Entities;
+using QuizArena.Persistence.Redis.Documents;
 using StackExchange.Redis;
 
 namespace QuizArena.Persistence.Redis;
@@ -15,7 +16,9 @@ public sealed class GameRoomStore(IConnectionMultiplexer redis) : IGameRoomStore
     
     public async Task SaveAsync(GameRoom gameRoom, CancellationToken ct = default)
     {
-        var json = JsonSerializer.Serialize(gameRoom);
+        var snapshot = gameRoom.ToSnapshot();
+        
+        var json = JsonSerializer.Serialize(snapshot);
 
         await Database.StringSetAsync(Key(gameRoom.RoomCode), json, RoomExpiration);
     }
@@ -27,7 +30,9 @@ public sealed class GameRoomStore(IConnectionMultiplexer redis) : IGameRoomStore
         if(json.IsNullOrEmpty)
             return null;
         
-        return JsonSerializer.Deserialize<GameRoom>((string)json!);
+        var snapshot = JsonSerializer.Deserialize<GameRoomSnapshot>((string)json!);
+
+        return snapshot?.ToDomain();
     }
 
     public async Task DeleteAsync(string roomCode, CancellationToken ct = default)
