@@ -1,4 +1,5 @@
 using QuizArena.Application.Common.Interfaces;
+using QuizArena.WebApi.Hubs;
 using QuizArena.WebApi.Services;
 
 namespace QuizArena.WebApi;
@@ -10,6 +11,10 @@ public static class DependencyInjection
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<ITokenService, TokenService>();
+
+        services.AddSignalR();
+
+        services.AddScoped<IGameNotifier, GameNotifier>();
 
         return services;
     }

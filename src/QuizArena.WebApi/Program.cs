@@ -6,6 +6,7 @@ using QuizArena.Application;
 using QuizArena.Persistence;
 using QuizArena.WebApi;
 using QuizArena.WebApi.Extensions;
+using QuizArena.WebApi.Hubs;
 using Scalar.AspNetCore;
 using Serilog;
 
@@ -85,6 +86,8 @@ try
     app.UseAuthorization();
 
     app.MapControllers();
+
+    app.MapHub<GameHub>("/hubs/game");
 
     Log.Information("Starting QuizArena.WebApi");
     
