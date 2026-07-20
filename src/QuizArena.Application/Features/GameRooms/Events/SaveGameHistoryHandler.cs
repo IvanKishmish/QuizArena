@@ -5,16 +5,11 @@ using QuizArena.Domain.Entities.Models;
 
 namespace QuizArena.Application.Features.GameRooms.Events;
 
-public sealed class SaveGameHistoryHandler(IAppDbContext context, IGameRoomStore gameRoomStore)
+public sealed class SaveGameHistoryHandler(IAppDbContext context)
 : INotificationHandler<GameFinishedNotification>
 {
     public async ValueTask Handle(GameFinishedNotification notification, CancellationToken ct = default)
     {
-        var gameRoom = await gameRoomStore.GetByRoomCodeAsync(notification.RoomCode, ct);
-
-        if (gameRoom is null)
-            return;
-
         for (var i = 0; i < notification.FinalLeaderboard.Count; i++)
         {
             var entry = notification.FinalLeaderboard[i];
@@ -24,7 +19,7 @@ public sealed class SaveGameHistoryHandler(IAppDbContext context, IGameRoomStore
                 notification.ParticipantUserIds.GetValueOrDefault(entry.ParticipantId),
                 entry.DisplayName,
                 (int)entry.Score,
-                Placement: i + 1);
+                i + 1);
 
             var historyResult = GameHistoryEntry.Create(creationParams);
 
