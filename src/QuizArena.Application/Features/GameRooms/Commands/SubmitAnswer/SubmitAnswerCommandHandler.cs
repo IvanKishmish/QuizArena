@@ -1,6 +1,7 @@
 using QuizArena.Application.Common.Interfaces;
 using Mediator;
 using ErrorOr;
+using FluentValidation;
 using QuizArena.Application.Common.Interfaces.Leaderboard;
 using QuizArena.Domain.Enums;
 
@@ -10,11 +11,19 @@ public sealed class SubmitAnswerCommandHandler(
     IGameRoomStore gameRoomStore,
     IQuestionStore questionStore,
     ILeaderboardStore leaderboardStore,
-    IGameNotifier gameNotifier)
+    IGameNotifier gameNotifier,
+    IValidator<SubmitAnswerCommand> validator)
 : ICommandHandler<SubmitAnswerCommand, ErrorOr<int>>
 {
     public async ValueTask<ErrorOr<int>> Handle(SubmitAnswerCommand command, CancellationToken ct = default)
     {
+        var validationResult = await validator.ValidateAsync(command, ct);
+
+        if (!validationResult.IsValid)
+            return validationResult.Errors
+                .Select(e => Error.Validation(e.PropertyName, e.ErrorMessage))
+                .ToList();
+        
         var gameRoom = await gameRoomStore.GetByRoomCodeAsync(command.RoomCode, ct);
 
         if (gameRoom is null)
