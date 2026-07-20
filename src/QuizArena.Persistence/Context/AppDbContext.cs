@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using QuizArena.Application.Common.Interfaces;
 using QuizArena.Domain.Entities;
+using QuizArena.Persistence.Identity;
 
 namespace QuizArena.Persistence.Context;
 
@@ -13,5 +14,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
+
+        modelBuilder.Ignore<RefreshToken>();
     }
 }

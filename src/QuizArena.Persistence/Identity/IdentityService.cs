@@ -1,10 +1,13 @@
 using ErrorOr;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using QuizArena.Application.Common.Interfaces;
 
 namespace QuizArena.Persistence.Identity;
 
-public sealed class IdentityService(UserManager<ApplicationUser> userManager) 
+public sealed class IdentityService(
+    UserManager<ApplicationUser> userManager,
+    ApplicationIdentityDbContext identityDbContext) 
 : IIdentityService
 {
     public async Task<ErrorOr<Guid>> CreateUserAsync(string email, string password, CancellationToken ct = default)
@@ -42,5 +45,40 @@ public sealed class IdentityService(UserManager<ApplicationUser> userManager)
             return Error.Unauthorized("Auth.InvalidCredentials", "Invalid email or password.");
 
         return user.Id;
+    }
+
+    public async Task StoreRefreshTokenAsync(Guid userId, string refreshTokenHash, TimeSpan lifetime, CancellationToken ct = default)
+    {
+        var refreshToken = RefreshToken.Create(userId, refreshTokenHash, lifetime);
+        
+        identityDbContext.RefreshTokens.Add(refreshToken);
+        
+        await identityDbContext.SaveChangesAsync(ct);
+    }
+
+    public async Task<Guid?> ValidateRefreshTokenAsync(string refreshTokenHash, CancellationToken ct = default)
+    {
+        var token = await identityDbContext
+            .RefreshTokens
+            .FirstOrDefaultAsync(t => t.TokenHash == refreshTokenHash, ct);
+
+        if (token is null || !token.IsActive)
+            return null;
+
+        return token.UserId;
+    }
+
+    public async Task RevokeRefreshTokenAsync(string refreshTokenHash, CancellationToken ct = default)
+    {
+        var token = await identityDbContext
+            .RefreshTokens
+            .FirstOrDefaultAsync(t => t.TokenHash == refreshTokenHash, ct);
+
+        if (token is null)
+            return;
+        
+        token.Revoke();
+        
+        await identityDbContext.SaveChangesAsync(ct);
     }
 }
