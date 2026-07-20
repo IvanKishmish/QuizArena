@@ -66,6 +66,16 @@ try
             };
         });
 
+    builder.Services.AddCors(options =>
+    {
+        options.AddDefaultPolicy(policy =>
+            policy
+                .SetIsOriginAllowed(_ => true) 
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials());
+    });
+    
     builder.Services.AddAuthorization();
 
     var app = builder.Build();
@@ -82,6 +92,9 @@ try
     }
 
     app.UseHttpsRedirection();
+
+    app.UseCors();
+    
     app.UseAuthentication();
     app.UseAuthorization();
 

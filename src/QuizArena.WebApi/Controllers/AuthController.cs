@@ -1,6 +1,7 @@
 using Mediator;
 using Microsoft.AspNetCore.Mvc;
 using QuizArena.Application.Features.Auth.Login;
+using QuizArena.Application.Features.Auth.RefreshToken;
 using QuizArena.Application.Features.Auth.Register;
 
 namespace QuizArena.WebApi.Controllers;
@@ -16,7 +17,14 @@ public sealed class AuthController(IMediator mediator) : ApiController(mediator)
     }
     
     [HttpPost("login")]
-    public async Task<IActionResult> Login(LoginCommand command, CancellationToken ct)
+    public async Task<IActionResult> Login(LoginCommand command, CancellationToken ct = default)
+    {
+        var result = await Mediator.Send(command, ct);
+        return HandleResult(result);
+    }
+
+    [HttpPost("refresh")]
+    public async Task<IActionResult> Refresh(RefreshTokenCommand command, CancellationToken ct = default)
     {
         var result = await Mediator.Send(command, ct);
         return HandleResult(result);
