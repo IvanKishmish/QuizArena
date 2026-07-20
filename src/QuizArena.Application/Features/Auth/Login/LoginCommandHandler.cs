@@ -2,6 +2,8 @@ using FluentValidation;
 using QuizArena.Application.Common.Interfaces;
 using Mediator;
 using ErrorOr;
+using QuizArena.Application.Common;
+using QuizArena.Application.Features.Auth.Common;
 
 namespace QuizArena.Application.Features.Auth.Login;
 
@@ -9,9 +11,11 @@ public sealed class LoginCommandHandler(
     IIdentityService identityService,
     ITokenService tokenService,
     IValidator<LoginCommand> validator)
-: ICommandHandler<LoginCommand, ErrorOr<string>>
+: ICommandHandler<LoginCommand, ErrorOr<TokenPair>>
 {
-    public async ValueTask<ErrorOr<string>> Handle(LoginCommand command, CancellationToken ct = default)
+    private static readonly TimeSpan RefreshTokenLifetime = TimeSpan.FromDays(7);
+    
+    public async ValueTask<ErrorOr<TokenPair>> Handle(LoginCommand command, CancellationToken ct = default)
     {
         var validationResult = await validator.ValidateAsync(command, ct);
 
@@ -25,8 +29,13 @@ public sealed class LoginCommandHandler(
         if (userIdResult.IsError)
             return userIdResult.Errors;
 
-        var token = tokenService.GenerateToken(userIdResult.Value, command.Email);
+        var accessToken = tokenService.GenerateAccessToken(userIdResult.Value);
+        var refreshToken = tokenService.GenerateRefreshToken();
+        var refreshTokenHash = TokenHasher.Hash(refreshToken);
 
-        return token;
+        await identityService
+            .StoreRefreshTokenAsync(userIdResult.Value, refreshTokenHash, RefreshTokenLifetime, ct);
+        
+        return new TokenPair(accessToken, refreshToken); 
     }
 }

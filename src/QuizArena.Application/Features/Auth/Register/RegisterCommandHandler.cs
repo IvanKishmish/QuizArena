@@ -2,6 +2,8 @@ using QuizArena.Application.Common.Interfaces;
 using ErrorOr;
 using FluentValidation;
 using Mediator;
+using QuizArena.Application.Common;
+using QuizArena.Application.Features.Auth.Common;
 using QuizArena.Domain.Entities;
 
 namespace QuizArena.Application.Features.Auth.Register;
@@ -9,10 +11,13 @@ namespace QuizArena.Application.Features.Auth.Register;
 public sealed class RegisterCommandHandler(
     IIdentityService identityService,
     IAppDbContext dbContext,
-    IValidator<RegisterCommand> validator)
-: ICommandHandler<RegisterCommand, ErrorOr<Guid>>
+    IValidator<RegisterCommand> validator,
+    ITokenService tokenService)
+: ICommandHandler<RegisterCommand, ErrorOr<TokenPair>>
 {
-    public async ValueTask<ErrorOr<Guid>> Handle(RegisterCommand command, CancellationToken ct = default)
+    private static readonly TimeSpan RefreshTokenLifetime = TimeSpan.FromDays(7);
+    
+    public async ValueTask<ErrorOr<TokenPair>> Handle(RegisterCommand command, CancellationToken ct = default)
     {
         var validationResult = await validator.ValidateAsync(command, ct);
         
@@ -34,6 +39,12 @@ public sealed class RegisterCommandHandler(
         dbContext.Players.Add(playerResult.Value);
         await dbContext.SaveChangesAsync(ct);
         
-        return userIdResult.Value;
+        var accessToken = tokenService.GenerateAccessToken(userIdResult.Value);
+        var refreshToken = tokenService.GenerateRefreshToken();
+        var refreshTokenHash = TokenHasher.Hash(refreshToken);
+
+        await identityService.StoreRefreshTokenAsync(userIdResult.Value, refreshTokenHash, RefreshTokenLifetime, ct);
+        
+        return new TokenPair(accessToken, refreshToken);
     }
 }
