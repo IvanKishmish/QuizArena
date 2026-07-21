@@ -4,6 +4,8 @@ using FluentValidation;
 using Mediator;
 using QuizArena.Application.Common;
 using QuizArena.Application.Features.Auth.Common;
+using QuizArena.Application.Features.Auth.Events;
+using QuizArena.Application.Features.GameRooms.Events;
 using QuizArena.Domain.Entities;
 
 namespace QuizArena.Application.Features.Auth.Register;
@@ -12,7 +14,8 @@ public sealed class RegisterCommandHandler(
     IIdentityService identityService,
     IAppDbContext dbContext,
     IValidator<RegisterCommand> validator,
-    ITokenService tokenService)
+    ITokenService tokenService,
+    IPublisher publisher)
 : ICommandHandler<RegisterCommand, ErrorOr<TokenPair>>
 {
     private static readonly TimeSpan RefreshTokenLifetime = TimeSpan.FromDays(7);
@@ -44,6 +47,8 @@ public sealed class RegisterCommandHandler(
         var refreshTokenHash = TokenHasher.Hash(refreshToken);
 
         await identityService.StoreRefreshTokenAsync(userIdResult.Value, refreshTokenHash, RefreshTokenLifetime, ct);
+
+        await publisher.Publish(new UserRegisteredNotification(userIdResult.Value, command.Email, command.NickName), ct);
         
         return new TokenPair(accessToken, refreshToken);
     }

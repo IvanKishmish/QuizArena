@@ -15,6 +15,8 @@ public static class DependencyInjection
         services.AddSignalR();
 
         services.AddScoped<IGameNotifier, GameNotifier>();
+        
+        services.AddHttpClient<IEmailSender, ResendEmailSender>();
 
         return services;
     }
