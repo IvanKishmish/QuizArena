@@ -1,6 +1,7 @@
 using QuizArena.Application.Common.Interfaces;
 using QuizArena.Application.Common.Interfaces.Leaderboard;
 using ErrorOr;
+using FluentValidation;
 using Mediator;
 using QuizArena.Application.Features.GameRooms.Events;
 
@@ -10,11 +11,19 @@ public sealed class EndGameCommandHandler(
     IGameRoomStore gameRoomStore,
     ILeaderboardStore leaderboardStore,
     IMediator mediator,
-    ICurrentUserService currentUser)
+    ICurrentUserService currentUser,
+    IValidator<EndGameCommand> validator)
     : ICommandHandler<EndGameCommand, ErrorOr<Updated>>
 {
     public async ValueTask<ErrorOr<Updated>> Handle(EndGameCommand command, CancellationToken ct = default)
     {
+        var validationResult = await validator.ValidateAsync(command, ct);
+
+        if (!validationResult.IsValid)
+            return validationResult.Errors
+                .Select(e => Error.Validation(e.PropertyName, e.ErrorMessage))
+                .ToList();
+        
         if (currentUser.UserId is null)
             return Error.Unauthorized("Auth.NotAuthenticated", "User is not authenticated.");
 

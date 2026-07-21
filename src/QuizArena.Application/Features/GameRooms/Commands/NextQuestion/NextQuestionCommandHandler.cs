@@ -1,4 +1,5 @@
 using ErrorOr;
+using FluentValidation;
 using Mediator;
 using QuizArena.Application.Common.Interfaces;
 
@@ -7,11 +8,19 @@ namespace QuizArena.Application.Features.GameRooms.Commands.NextQuestion;
 public sealed class NextQuestionCommandHandler(
     IGameRoomStore gameRoomStore,
     IQuestionStore questionStore,
-    IGameNotifier gameNotifier)
+    IGameNotifier gameNotifier,
+    IValidator<NextQuestionCommand> validator)
 : ICommandHandler<NextQuestionCommand, ErrorOr<Updated>>
 {
     public async ValueTask<ErrorOr<Updated>> Handle(NextQuestionCommand command, CancellationToken ct = default)
     {
+        var validationResult = await validator.ValidateAsync(command, ct);
+
+        if (!validationResult.IsValid)
+            return validationResult.Errors
+                .Select(e => Error.Validation(e.PropertyName, e.ErrorMessage))
+                .ToList();
+        
         var gameRoom = await gameRoomStore.GetByRoomCodeAsync(command.RoomCode, ct);
         if (gameRoom is null)
             return Error.NotFound("GameRoom.NotFound", "Room not found.");
