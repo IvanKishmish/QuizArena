@@ -81,4 +81,15 @@ public sealed class IdentityService(
         
         await identityDbContext.SaveChangesAsync(ct);
     }
+
+    public async Task<IReadOnlyDictionary<Guid, string>> GetEmailsAsync(IReadOnlyCollection<Guid> userIds,
+        CancellationToken ct = default)
+    {
+        if (userIds.Count == 0)
+            return new Dictionary<Guid, string>();
+        
+        return await userManager.Users
+            .Where(u => userIds.Contains(u.Id) && u.Email != null)
+            .ToDictionaryAsync(u => u.Id, u => u.Email!, ct);
+    }
 }
