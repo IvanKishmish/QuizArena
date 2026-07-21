@@ -37,6 +37,7 @@ wwwroot/
 # Environment variables (Sensitive data)
 # ==========================================
 .env
+.env.docker
 .env.local
 .env.development.local
 .env.test.local

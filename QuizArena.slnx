@@ -1,12 +1,12 @@
 <Solution>
   <Folder Name="/Core/">
-    <Project Path="src/QuizArena.Domain/QuizArena.Domain.csproj" />
-    <Project Path="src\QuizArena.Application\QuizArena.Application.csproj" Type="Classic C#" />
+    <Project Path="src/backend/QuizArena.Domain/QuizArena.Domain.csproj" />
+    <Project Path="src/backend/QuizArena.Application/QuizArena.Application.csproj" Type="Classic C#" />
   </Folder>
   <Folder Name="/Infrastructure/">
-    <Project Path="src\QuizArena.Persistence\QuizArena.Persistence.csproj" Type="Classic C#" />
+    <Project Path="src/backend/QuizArena.Persistence/QuizArena.Persistence.csproj" Type="Classic C#" />
   </Folder>
   <Folder Name="/Presentation/">
-    <Project Path="src\QuizArena.WebApi\QuizArena.WebApi.csproj" Type="Classic C#" />
+    <Project Path="src/backend/QuizArena.WebApi/QuizArena.WebApi.csproj" Type="Classic C#" />
   </Folder>
 </Solution>
