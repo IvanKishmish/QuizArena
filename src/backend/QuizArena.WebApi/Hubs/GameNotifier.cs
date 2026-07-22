@@ -16,4 +16,11 @@ public sealed class GameNotifier(IHubContext<GameHub> hubContext) : IGameNotifie
     
     public async Task LeaderboardUpdatedAsync(string roomCode, object payload, CancellationToken ct = default)
         => await hubContext.Clients.Group(roomCode).SendAsync("LeaderboardUpdated", payload, ct);
+    
+    public async Task PowerUpUsedAsync(string roomCode, object payload, CancellationToken ct = default)
+        => await hubContext.Clients.Group(roomCode).SendAsync("PowerUpUsed", payload, ct);
+
+    public async Task SendToParticipantAsync(string connectionId, string method, object payload,
+        CancellationToken ct = default)
+        => await hubContext.Clients.Client(connectionId).SendAsync(method, payload, ct);
 }

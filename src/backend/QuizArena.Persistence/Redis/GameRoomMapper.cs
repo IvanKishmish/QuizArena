@@ -1,4 +1,5 @@
 using QuizArena.Domain.Entities;
+using QuizArena.Domain.Entities.Models;
 using QuizArena.Persistence.Redis.Documents;
 
 namespace QuizArena.Persistence.Redis;
@@ -27,7 +28,11 @@ public static class GameRoomMapper
             DisplayName = participant.DisplayName,
             UserId = participant.UserId,
             GuestId = participant.GuestId,
-            Score = participant.Score
+            Score = participant.Score,
+            AvailablePowerUps = participant.AvailablePowerUps,
+            ActiveDoubleOrNothing = participant.ActiveDoubleOrNothing,
+            IsFrozen = participant.IsFrozen,
+            FrozenUntil = participant.FrozenUntil
         };
     
     public static GameRoom ToDomain(this GameRoomSnapshot snapshot)
@@ -48,11 +53,14 @@ public static class GameRoomMapper
     }
 
     private static Participant ToDomain(this ParticipantSnapshot snapshot)
-        => new Participant(
-            snapshot.Id,
+        => new Participant(snapshot.Id, new ParticipantCreationParams(
             snapshot.DisplayName,
             snapshot.UserId,
             snapshot.GuestId,
-            snapshot.Score);
+            snapshot.Score,
+            snapshot.AvailablePowerUps,
+            snapshot.ActiveDoubleOrNothing,
+            snapshot.IsFrozen,
+            snapshot.FrozenUntil));
     
 }
