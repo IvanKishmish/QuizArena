@@ -26,6 +26,15 @@ public sealed class JoinGameRoomCommandHandler(
             return Error.NotFound("GameRoom.NotFound", "Room not found.");
         
         Guid? userId = currentUser.UserId;
+
+        if (userId is not null)
+        {
+            var existingParticipant = gameRoom.Participants.FirstOrDefault(p => p.UserId == userId);
+            
+            if (existingParticipant is not null)
+                return existingParticipant.Id;
+        }
+        
         Guid? guestId = userId is null ? Guid.CreateVersion7() : null;
         
         var addResult = gameRoom.AddParticipant(userId, guestId, command.DisplayName);

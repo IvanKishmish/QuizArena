@@ -37,6 +37,14 @@ public sealed class SubmitAnswerCommandHandler(
         
         if (participant is null)
             return Error.NotFound("Participant.NotFound", "Participant not found in this room.");
+        
+        if (participant.IsFrozen)
+        {
+            participant.ClearFreezeIfExpired();
+
+            if (participant.IsFrozen)
+                return Error.Validation("Participant.Frozen", "You are currently frozen and cannot answer.");
+        }
 
         var question = await questionStore.GetByIdAsync(gameRoom.QuizSetId, command.QuestionId, ct);
         
