@@ -48,7 +48,7 @@ services:
   webapi:
     build:
       context: .
-      dockerfile: src/QuizArena.WebApi/Dockerfile
+      dockerfile: src/backend/QuizArena.WebApi/Dockerfile
     container_name: quizarena-webapi
     env_file:
       - .env.docker
