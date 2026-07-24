@@ -100,6 +100,9 @@ public sealed class GameRoom : TransientEntity
         if (_participants.Count == 0)
             return Error.Validation("GameRoom.NotEnoughParticipants", "At least one participant is required to start the game.");
 
+        foreach(var participant in _participants)
+            participant.GrantDefaultPowerUps();
+        
         Status = GameRoomStatus.InProgress;
         StartedAt = DateTimeOffset.UtcNow;
         CurrentQuestionIndex = 0;

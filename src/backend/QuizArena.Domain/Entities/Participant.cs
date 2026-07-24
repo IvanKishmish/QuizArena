@@ -1,17 +1,23 @@
 using QuizArena.Domain.Common;
 using ErrorOr;
+using QuizArena.Domain.Entities.Models;
+using QuizArena.Domain.Enums;
 
 namespace QuizArena.Domain.Entities;
 
 public sealed class Participant : TransientEntity
 {
     public string DisplayName { get; private init; } = string.Empty;
-
     public Guid? UserId { get; private init; }
-
     public Guid? GuestId { get; private init; }
-
     public int Score { get; private set; }
+
+    private readonly List<PowerUpType> _availablePowerUps = [];
+    public IReadOnlyList<PowerUpType> AvailablePowerUps => _availablePowerUps.AsReadOnly();
+    
+    public PowerUpType? ActiveDoubleOrNothing { get; private set; }
+    public bool IsFrozen { get; private set; }
+    public DateTimeOffset? FrozenUntil { get; private set; }
 
     private Participant()
     { } // ef
@@ -23,12 +29,16 @@ public sealed class Participant : TransientEntity
         DisplayName = displayName;
     }
     
-    internal Participant(Guid id, string displayName, Guid? userId, Guid? guestId, int score) : base(id)
+    internal Participant(Guid id, ParticipantCreationParams args) : base(id)
     {
-        DisplayName = displayName;
-        UserId = userId;
-        GuestId = guestId;
-        Score = score;
+        DisplayName = args.DisplayName;
+        UserId = args.UserId;
+        GuestId = args.GuestId;
+        Score = args.Score;
+        _availablePowerUps = args.AvailablePowerUp.ToList();
+        ActiveDoubleOrNothing = args.ActiveDoubleOrNothing;
+        IsFrozen = args.IsFrozen;
+        FrozenUntil = args.FrozenUntil;
     }
     
     public static ErrorOr<Participant> Create(Guid? userId, Guid? guestId, string displayName)
@@ -55,8 +65,47 @@ public sealed class Participant : TransientEntity
         if (points < 0)
             return Error.Validation("Participant.NegativeScore", "Points to add cannot be negative");
 
-        Score += points;
+        var finalPoints = ActiveDoubleOrNothing == PowerUpType.DoubleOrNothing
+            ? points * 2
+            : points;
+
+        Score += finalPoints;
+        ActiveDoubleOrNothing = null;
 
         return Result.Updated;
+    }
+
+    public void GrantDefaultPowerUps()
+    {
+        _availablePowerUps.Clear();
+        _availablePowerUps.AddRange(Enum.GetValues<PowerUpType>());
+    }
+
+    public ErrorOr<Updated> UsePowerUp(PowerUpType type)
+    {
+        if (!_availablePowerUps.Contains(type))
+            return Error.Validation("Participant.PowerUpNotAvailable", "This power-up is not available or already used.");
+        
+        _availablePowerUps.Remove(type);
+
+        if (type == PowerUpType.DoubleOrNothing)
+            ActiveDoubleOrNothing = type;
+        
+        return Result.Updated;
+    }
+
+    public void ApplyFreeze(TimeSpan duration)
+    {
+        IsFrozen = true;
+        FrozenUntil = DateTimeOffset.UtcNow.Add(duration);
+    }
+
+    public void ClearFreezeIfExpired()
+    {
+        if (IsFrozen && FrozenUntil is not null && DateTimeOffset.UtcNow >= FrozenUntil)
+        {
+            IsFrozen = false;
+            FrozenUntil = null;
+        }
     }
 }

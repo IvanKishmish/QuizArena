@@ -39,9 +39,9 @@ public sealed class QuizSetsController(IMediator mediator) : ApiController(media
     }
     
     [HttpGet("public")]
-    public async Task<IActionResult> GetPublic(CancellationToken ct = default)
+    public async Task<IActionResult> GetPublic(int pageNumber = 1, int pageSize = 20, CancellationToken ct = default)
     {
-        var result = await Mediator.Send(new GetPublicQuizSetsQuery(), ct);
+        var result = await Mediator.Send(new GetPublicQuizSetsQuery(pageNumber, pageSize), ct);
         return HandleResult(result);
     }
     

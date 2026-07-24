@@ -79,6 +79,7 @@ public static class DependencyInjection
         services.AddSingleton<IGameRoomStore, GameRoomStore>();
         services.AddScoped<IRoomCodeGenerator, RoomCodeGenerator>();
         services.AddScoped<ILeaderboardStore, LeaderboardStore>();
+        services.AddScoped<IConnectionTracker, ConnectionTracker>();
 
         return services;
     }

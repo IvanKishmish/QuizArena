@@ -44,6 +44,9 @@ public sealed class Question : Entity
 
     public int CalculateScore(IReadOnlyList<int> selectedOptionIndices, double elapsedSeconds)
     {
+        if (!IsValidAnswerFormat(selectedOptionIndices))
+            return 0;
+        
         var correctIndices = Options
             .Select((o, i) => (o.IsCorrect, Index: i))
             .Where(x => x.IsCorrect)
@@ -72,6 +75,23 @@ public sealed class Question : Entity
         var speedBonus = Points / 2.0 * timeRatio;
 
         return (int)Math.Round(Points / 2.0 + speedBonus);
+    }
+
+    private bool IsValidAnswerFormat(IReadOnlyList<int> selectedOptionIndices)
+    {
+        if (selectedOptionIndices.Count == 0)
+            return false;
+        
+        if(selectedOptionIndices.Any(i => i < 0 || i >= Options.Count))
+            return false;
+
+        if (selectedOptionIndices.Distinct().Count() != selectedOptionIndices.Count)
+            return false;
+
+        if (QuestionType == QuestionType.Ordering && selectedOptionIndices.Count != Options.Count)
+            return false;
+
+        return true;
     }
     
     private static ErrorOr<Success> ValidateInvariants(QuestionCreationParams args)
