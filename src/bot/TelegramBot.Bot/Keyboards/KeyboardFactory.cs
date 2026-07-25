@@ -11,6 +11,7 @@ public static class KeyboardFactory
             {
                 new[] { new KeyboardButton("🗂 Мої квізи"), new KeyboardButton("🌐 Каталог") },
                 new[] { new KeyboardButton("🎮 Приєднатись до гри") },
+                new[] { new KeyboardButton("🚪 Вийти") },
             }
             : new[]
             {
@@ -19,21 +20,13 @@ public static class KeyboardFactory
             })
     { ResizeKeyboard = true };
 
-    public static InlineKeyboardMarkup MyQuizzesList(IReadOnlyList<(Guid Id, string Title, bool Published)> quizzes, int page, int totalPages)
+    public static InlineKeyboardMarkup MyQuizzesList(IReadOnlyList<(Guid Id, string Title, bool Published)> quizzes)
     {
         var rows = quizzes
             .Select(q => new[] { InlineKeyboardButton.WithCallbackData($"{(q.Published ? "🟢" : "⚪")} {q.Title}", $"quiz:open:{q.Id}") })
             .ToList();
 
         rows.Add(new[] { InlineKeyboardButton.WithCallbackData("➕ Новий квіз", "quiz:create") });
-
-        if (totalPages > 1)
-        {
-            var nav = new List<InlineKeyboardButton>();
-            if (page > 1) nav.Add(InlineKeyboardButton.WithCallbackData("⬅️ Назад", $"quiz:mylist:{page - 1}"));
-            if (page < totalPages) nav.Add(InlineKeyboardButton.WithCallbackData("Далі ➡️", $"quiz:mylist:{page + 1}"));
-            if (nav.Count > 0) rows.Add(nav.ToArray());
-        }
 
         return new InlineKeyboardMarkup(rows);
     }

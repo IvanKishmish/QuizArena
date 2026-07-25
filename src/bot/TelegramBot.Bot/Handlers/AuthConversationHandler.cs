@@ -14,7 +14,8 @@ namespace TelegramBot.Bot.Handlers;
 public sealed class AuthConversationHandler(
     ITelegramBotClient botClient,
     IConversationStateStore stateStore,
-    IQuizArenaApiClient apiClient)
+    IQuizArenaApiClient apiClient,
+    ITokenStore tokenStore)
 {
     public async Task StartRegistrationAsync(UpdateContext context, CancellationToken ct)
     {
@@ -33,6 +34,19 @@ public sealed class AuthConversationHandler(
         await botClient.SendMessage(context.ChatId, "Введи email, яким реєструвався(-лась) в QuizArena.",
             replyMarkup: KeyboardFactory.Remove(), cancellationToken: ct);
     }
+    
+    public async Task LogoutAsync(UpdateContext context, CancellationToken ct)
+    {
+        if (context.IsAuthenticated)
+            await apiClient.LogoutAsync(context.ChatId, ct);
+
+        await tokenStore.ClearAsync(context.ChatId, ct);
+        await stateStore.ClearAsync(context.ChatId, ct);
+
+        await botClient.SendMessage(context.ChatId, "Вихід виконано. До зустрічі! 👋",
+            replyMarkup: KeyboardFactory.MainMenu(isAuthenticated: false), cancellationToken: ct);
+    }
+
 
     public async Task HandleMessageAsync(UpdateContext context, ConversationContext convo, string text, CancellationToken ct)
     {

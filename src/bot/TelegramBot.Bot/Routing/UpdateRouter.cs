@@ -78,6 +78,12 @@ public sealed class UpdateRouter(
             return;
         }
 
+        if (text is "🚪 Вийти")
+        {
+            await authHandler.LogoutAsync(context, ct);
+            return;
+        }
+
         var convo = await stateStore.GetAsync(context.ChatId, ct);
         await RouteConversationMessageAsync(context, convo, text, ct);
     }
@@ -107,7 +113,7 @@ public sealed class UpdateRouter(
                 return;
 
             default:
-                await botClient.SendMessage(context.ChatId, "Не зрозумів. Скористайся меню або командою /start.", cancellationToken: ct);
+                await botClient.SendMessage(context.ChatId, "Не зрозумів. Скористайся меню, /start або /help.", cancellationToken: ct);
                 return;
         }
     }
@@ -122,12 +128,20 @@ public sealed class UpdateRouter(
                 await startHandler.HandleAsync(context, ct);
                 return;
 
+            case "/help":
+                await startHandler.HandleHelpAsync(context, ct);
+                return;
+
             case "/newquiz":
                 await createQuizHandler.StartAsync(context, ct);
                 return;
 
             case "/join":
                 await gameRoomHandler.StartJoinFlowAsync(context, ct);
+                return;
+
+            case "/logout":
+                await authHandler.LogoutAsync(context, ct);
                 return;
 
             case "/admin_stats":
@@ -147,7 +161,7 @@ public sealed class UpdateRouter(
                 return;
 
             default:
-                await botClient.SendMessage(context.ChatId, "Невідома команда. /start — щоб побачити меню.", cancellationToken: ct);
+                await botClient.SendMessage(context.ChatId, "Невідома команда. /help — щоб побачити список команд.", cancellationToken: ct);
                 return;
         }
     }
@@ -159,12 +173,7 @@ public sealed class UpdateRouter(
 
         var convo = await stateStore.GetAsync(context.ChatId, ct);
 
-        if (data.StartsWith("quiz:mylist:"))
-        {
-            // pagination — page number in data, actual re-render delegated the same as first page for brevity
-            await quizMenuHandler.ShowMyQuizzesAsync(context, ct);
-        }
-        else if (data.StartsWith("quiz:open:"))
+        if (data.StartsWith("quiz:open:"))
         {
             await quizMenuHandler.ShowQuizDetailsAsync(context, Guid.Parse(data["quiz:open:".Length..]), ct);
         }
@@ -224,6 +233,14 @@ public sealed class UpdateRouter(
         else if (data == "quiz:finish")
         {
             await createQuizHandler.FinishAsync(context, convo, ct);
+        }
+        else if (data.StartsWith("catalog:page:"))
+        {
+            await quizMenuHandler.ShowPublicCatalogAsync(context, int.Parse(data["catalog:page:".Length..]), ct);
+        }
+        else if (data.StartsWith("catalog:open:"))
+        {
+            await quizMenuHandler.ShowQuizDetailsAsync(context, Guid.Parse(data["catalog:open:".Length..]), ct);
         }
         else if (data.StartsWith("room:create:"))
         {

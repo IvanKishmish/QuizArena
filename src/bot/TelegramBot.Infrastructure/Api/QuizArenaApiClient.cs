@@ -66,6 +66,9 @@ public sealed class QuizArenaApiClient : IQuizArenaApiClient
         using var response = await _http.SendAsync(msg, ct);
         return await HandleAuthResponseAsync(chatId, response, ct);
     }
+    
+    public Task<ApiResult<object?>> LogoutAsync(long chatId, CancellationToken ct) =>
+        SendAuthorizedAsync<object?>(chatId, HttpMethod.Post, "/api/auth/logout", null, ct);
 
     private async Task<ApiResult<TokenPairResult>> HandleAuthResponseAsync(long chatId, HttpResponseMessage response, CancellationToken ct)
     {

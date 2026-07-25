@@ -19,6 +19,7 @@ public interface IQuizArenaApiClient
     /// <summary>Forces a refresh using the stored cookie value. Normally called internally,
     /// but exposed for the /start "am I still logged in" check.</summary>
     Task<ApiResult<TokenPairResult>> RefreshAsync(long chatId, CancellationToken ct);
+    Task<ApiResult<object?>> LogoutAsync(long chatId, CancellationToken ct);
 
     // ---- QuizSets ----
     Task<ApiResult<CreatedQuizSetResponse>> CreateQuizSetAsync(long chatId, CreateQuizSetRequest request, CancellationToken ct);
