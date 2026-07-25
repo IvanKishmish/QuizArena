@@ -33,7 +33,9 @@ public sealed class RefreshTokenCommandHandler(
 
         await identityService.RevokeRefreshTokenAsync(incomingHash, ct);
 
-        var newAccessToken = tokenService.GenerateAccessToken(userId.Value);
+        var roles = await identityService.GetUserRolesAsync(userId.Value, ct);
+        
+        var newAccessToken = tokenService.GenerateAccessToken(userId.Value, roles);
         var newRefreshToken = tokenService.GenerateRefreshToken();
         var newRefreshTokenHash = TokenHasher.Hash(newRefreshToken);
 

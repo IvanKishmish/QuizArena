@@ -29,7 +29,9 @@ public sealed class LoginCommandHandler(
         if (userIdResult.IsError)
             return userIdResult.Errors;
 
-        var accessToken = tokenService.GenerateAccessToken(userIdResult.Value);
+        var roles = await identityService.GetUserRolesAsync(userIdResult.Value, ct);
+        
+        var accessToken = tokenService.GenerateAccessToken(userIdResult.Value, roles);
         var refreshToken = tokenService.GenerateRefreshToken();
         var refreshTokenHash = TokenHasher.Hash(refreshToken);
 
