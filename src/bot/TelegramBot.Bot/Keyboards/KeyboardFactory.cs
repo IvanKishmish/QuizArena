@@ -48,6 +48,8 @@ public static class KeyboardFactory
     public static InlineKeyboardMarkup QuizDetailsActions(Guid quizId, bool isPublished) => new(new[]
     {
         new[] { InlineKeyboardButton.WithCallbackData("➕ Додати питання", $"quiz:addq:{quizId}") },
+        new[] { InlineKeyboardButton.WithCallbackData("📋 Питання", $"quiz:questions:{quizId}") },
+        new[] { InlineKeyboardButton.WithCallbackData("✏️ Редагувати назву/опис", $"quiz:edit:{quizId}") },
         new[]
         {
             isPublished
@@ -57,6 +59,25 @@ public static class KeyboardFactory
         new[] { InlineKeyboardButton.WithCallbackData("🎮 Створити ігрову кімнату", $"room:create:{quizId}") },
         new[] { InlineKeyboardButton.WithCallbackData("🗑 Видалити квіз", $"quiz:delete:{quizId}") },
     });
+
+    public static InlineKeyboardMarkup QuestionsList(Guid quizId, IReadOnlyList<(Guid Id, string Text)> questions)
+    {
+        var rows = questions
+            .Select(q => new[]
+            {
+                InlineKeyboardButton.WithCallbackData(
+                    q.Text.Length > 40 ? q.Text[..40] + "…" : q.Text, $"q:noop:{q.Id}"),
+                InlineKeyboardButton.WithCallbackData("🗑", $"q:delete:{quizId}:{q.Id}")
+            })
+            .ToList();
+
+        rows.Add(new[] { InlineKeyboardButton.WithCallbackData("⬅️ Назад до квізу", $"quiz:open:{quizId}") });
+
+        return new InlineKeyboardMarkup(rows);
+    }
+
+    public static InlineKeyboardMarkup ConfirmDeleteQuestion(Guid quizId, Guid questionId) =>
+        YesNo($"q:delete_confirm:{quizId}:{questionId}", $"q:delete_cancel:{quizId}");
 
     public static InlineKeyboardMarkup YesNo(string yesCallback, string noCallback) => new(new[]
     {

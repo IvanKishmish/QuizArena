@@ -68,6 +68,36 @@ public sealed class QuizMenuHandler(ITelegramBotClient botClient, IQuizArenaApiC
             KeyboardFactory.QuizDetailsActions(quiz.Id, quiz.IsPublished), ct, ParseMode.MarkdownV2);
     }
 
+    public async Task ShowQuestionsAsync(UpdateContext context, Guid quizId, CancellationToken ct)
+    {
+        var result = await apiClient.GetQuestionsAsync(context.ChatId, quizId, ct);
+        if (!result.IsSuccess)
+        {
+            await botClient.SendMessage(context.ChatId, "Не вдалось отримати питання цього квізу.", cancellationToken: ct);
+            return;
+        }
+
+        var questions = result.Value!;
+        if (questions.Count == 0)
+        {
+            await menu.ShowAsync(context.ChatId, "У цього квізу поки немає питань.", KeyboardFactory.QuestionsList(quizId, []), ct);
+            return;
+        }
+
+        var items = questions.Select(q => (q.Id, q.Text)).ToList();
+        await menu.ShowAsync(context.ChatId, $"Питання квізу ({questions.Count}):", KeyboardFactory.QuestionsList(quizId, items), ct);
+    }
+
+    public async Task DeleteQuestionAsync(UpdateContext context, Guid quizId, Guid questionId, CancellationToken ct)
+    {
+        var result = await apiClient.DeleteQuestionAsync(context.ChatId, quizId, questionId, ct);
+
+        if (!result.IsSuccess)
+            await botClient.SendMessage(context.ChatId, "Не вдалось видалити питання.", cancellationToken: ct);
+
+        await ShowQuestionsAsync(context, quizId, ct);
+    }
+
     public async Task PublishAsync(UpdateContext context, Guid quizId, bool publish, CancellationToken ct)
     {
         var result = publish

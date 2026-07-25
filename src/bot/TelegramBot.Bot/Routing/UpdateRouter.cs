@@ -5,6 +5,7 @@ using TelegramBot.Application.Contracts.Api;
 using TelegramBot.Application.Conversations;
 using TelegramBot.Application.Interfaces;
 using TelegramBot.Bot.Handlers;
+using TelegramBot.Bot.Keyboards;
 using TelegramBot.Bot.Middleware;
 
 namespace TelegramBot.Bot.Routing;
@@ -96,7 +97,7 @@ public sealed class UpdateRouter(
                 await authHandler.HandleMessageAsync(context, convo, text, ct);
                 return;
 
-            case ConversationFlow.CreatingQuiz or ConversationFlow.AddingQuestion:
+            case ConversationFlow.CreatingQuiz or ConversationFlow.AddingQuestion or ConversationFlow.EditingQuiz:
                 await createQuizHandler.HandleMessageAsync(context, convo, text, ct);
                 return;
 
@@ -188,6 +189,32 @@ public sealed class UpdateRouter(
             convo.Data.QuizSetId = Guid.Parse(data["quiz:addq:".Length..]);
             await stateStore.SetAsync(context.ChatId, convo, ct);
             await botClient.SendMessage(context.ChatId, "Текст питання:", cancellationToken: ct);
+        }
+        else if (data.StartsWith("quiz:edit:"))
+        {
+            await createQuizHandler.StartEditAsync(context, Guid.Parse(data["quiz:edit:".Length..]), ct);
+        }
+        else if (data.StartsWith("quiz:questions:"))
+        {
+            await quizMenuHandler.ShowQuestionsAsync(context, Guid.Parse(data["quiz:questions:".Length..]), ct);
+        }
+        else if (data.StartsWith("q:noop:"))
+        {
+        }
+        else if (data.StartsWith("q:delete_confirm:"))
+        {
+            var parts = data["q:delete_confirm:".Length..].Split(':');
+            await quizMenuHandler.DeleteQuestionAsync(context, Guid.Parse(parts[0]), Guid.Parse(parts[1]), ct);
+        }
+        else if (data.StartsWith("q:delete_cancel:"))
+        {
+            await quizMenuHandler.ShowQuestionsAsync(context, Guid.Parse(data["q:delete_cancel:".Length..]), ct);
+        }
+        else if (data.StartsWith("q:delete:"))
+        {
+            var parts = data["q:delete:".Length..].Split(':');
+            await botClient.SendMessage(context.ChatId, "Видалити це питання назавжди?",
+                replyMarkup: KeyboardFactory.ConfirmDeleteQuestion(Guid.Parse(parts[0]), Guid.Parse(parts[1])), cancellationToken: ct);
         }
         else if (data.StartsWith("quiz:publish:"))
         {
