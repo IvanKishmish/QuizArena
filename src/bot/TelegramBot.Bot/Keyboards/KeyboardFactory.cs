@@ -1,0 +1,118 @@
+using Telegram.Bot.Types.ReplyMarkups;
+using TelegramBot.Application.Contracts.Api;
+
+namespace TelegramBot.Bot.Keyboards;
+
+public static class KeyboardFactory
+{
+    public static ReplyKeyboardMarkup MainMenu(bool isAuthenticated) => new(
+        isAuthenticated
+            ? new[]
+            {
+                new[] { new KeyboardButton("🗂 Мої квізи"), new KeyboardButton("🌐 Каталог") },
+                new[] { new KeyboardButton("🎮 Приєднатись до гри") },
+            }
+            : new[]
+            {
+                new[] { new KeyboardButton("🔑 Увійти"), new KeyboardButton("📝 Реєстрація") },
+                new[] { new KeyboardButton("🎮 Приєднатись до гри") },
+            })
+    { ResizeKeyboard = true };
+
+    public static InlineKeyboardMarkup MyQuizzesList(IReadOnlyList<(Guid Id, string Title, bool Published)> quizzes, int page, int totalPages)
+    {
+        var rows = quizzes
+            .Select(q => new[] { InlineKeyboardButton.WithCallbackData($"{(q.Published ? "🟢" : "⚪")} {q.Title}", $"quiz:open:{q.Id}") })
+            .ToList();
+
+        rows.Add(new[] { InlineKeyboardButton.WithCallbackData("➕ Новий квіз", "quiz:create") });
+
+        if (totalPages > 1)
+        {
+            var nav = new List<InlineKeyboardButton>();
+            if (page > 1) nav.Add(InlineKeyboardButton.WithCallbackData("⬅️ Назад", $"quiz:mylist:{page - 1}"));
+            if (page < totalPages) nav.Add(InlineKeyboardButton.WithCallbackData("Далі ➡️", $"quiz:mylist:{page + 1}"));
+            if (nav.Count > 0) rows.Add(nav.ToArray());
+        }
+
+        return new InlineKeyboardMarkup(rows);
+    }
+
+    public static InlineKeyboardMarkup PublicCatalog(IReadOnlyList<(Guid Id, string Title)> quizzes, int page, int totalPages)
+    {
+        var rows = quizzes
+            .Select(q => new[] { InlineKeyboardButton.WithCallbackData(q.Title, $"catalog:open:{q.Id}") })
+            .ToList();
+
+        var nav = new List<InlineKeyboardButton>();
+        if (page > 1) nav.Add(InlineKeyboardButton.WithCallbackData("⬅️ Назад", $"catalog:page:{page - 1}"));
+        if (page < totalPages) nav.Add(InlineKeyboardButton.WithCallbackData("Далі ➡️", $"catalog:page:{page + 1}"));
+        if (nav.Count > 0) rows.Add(nav.ToArray());
+
+        return new InlineKeyboardMarkup(rows);
+    }
+
+    public static InlineKeyboardMarkup QuizDetailsActions(Guid quizId, bool isPublished) => new(new[]
+    {
+        new[] { InlineKeyboardButton.WithCallbackData("➕ Додати питання", $"quiz:addq:{quizId}") },
+        new[]
+        {
+            isPublished
+                ? InlineKeyboardButton.WithCallbackData("🔒 Зняти з публікації", $"quiz:unpublish:{quizId}")
+                : InlineKeyboardButton.WithCallbackData("📢 Опублікувати", $"quiz:publish:{quizId}")
+        },
+        new[] { InlineKeyboardButton.WithCallbackData("🎮 Створити ігрову кімнату", $"room:create:{quizId}") },
+        new[] { InlineKeyboardButton.WithCallbackData("🗑 Видалити квіз", $"quiz:delete:{quizId}") },
+    });
+
+    public static InlineKeyboardMarkup YesNo(string yesCallback, string noCallback) => new(new[]
+    {
+        new[]
+        {
+            InlineKeyboardButton.WithCallbackData("✅ Так", yesCallback),
+            InlineKeyboardButton.WithCallbackData("❌ Ні", noCallback),
+        }
+    });
+
+    public static InlineKeyboardMarkup QuestionTypeChoice() => new(new[]
+    {
+        new[] { InlineKeyboardButton.WithCallbackData("Один варіант", "qtype:0"), InlineKeyboardButton.WithCallbackData("Кілька варіантів", "qtype:1") },
+        new[] { InlineKeyboardButton.WithCallbackData("Так/Ні", "qtype:2"), InlineKeyboardButton.WithCallbackData("Впорядкування", "qtype:3") },
+    });
+
+    /// <summary>Answer options for a live question — index in the callback data is what
+    /// SubmitAnswer's selectedOptionIndices expects, never the option's own id.</summary>
+    public static InlineKeyboardMarkup AnswerOptions(IReadOnlyList<QuestionStartedOption> options, bool multipleChoice)
+    {
+        var rows = options
+            .Select(o => new[] { InlineKeyboardButton.WithCallbackData(o.Text, $"answer:{o.Index}") })
+            .ToList();
+
+        if (multipleChoice)
+            rows.Add(new[] { InlineKeyboardButton.WithCallbackData("✅ Підтвердити вибір", "answer:submit") });
+
+        return new InlineKeyboardMarkup(rows);
+    }
+
+    public static InlineKeyboardMarkup PowerUps(IReadOnlyList<PowerUpType> available) => new(
+        available.Select(p => new[]
+        {
+            InlineKeyboardButton.WithCallbackData(PowerUpLabel(p), $"powerup:{(int)p}")
+        }));
+
+    private static string PowerUpLabel(PowerUpType type) => type switch
+    {
+        PowerUpType.Freeze => "🧊 Freeze",
+        PowerUpType.FiftyFifty => "➗ 50/50",
+        PowerUpType.DoubleOrNothing => "🎲 Double or Nothing",
+        _ => type.ToString()
+    };
+
+    public static InlineKeyboardMarkup HostControls() => new(new[]
+    {
+        new[] { InlineKeyboardButton.WithCallbackData("▶️ Наступне питання", "host:next") },
+        new[] { InlineKeyboardButton.WithCallbackData("🏁 Завершити гру", "host:end") },
+    });
+
+    public static ReplyKeyboardRemove Remove() => new();
+}
