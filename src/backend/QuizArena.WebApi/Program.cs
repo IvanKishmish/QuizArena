@@ -66,14 +66,21 @@ try
             };
         });
 
+    var corsOriginString = builder.Configuration["CORS_ALLOWED_ORIGINS"];
+    
+    var allowedOrigins = !string.IsNullOrEmpty(corsOriginString)
+        ? corsOriginString.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        : [];
+
     builder.Services.AddCors(options =>
     {
         options.AddDefaultPolicy(policy =>
-            policy
-                .SetIsOriginAllowed(_ => true) 
+        {
+            policy.WithOrigins(allowedOrigins)
                 .AllowAnyHeader()
                 .AllowAnyMethod()
-                .AllowCredentials());
+                .AllowCredentials();
+        });
     });
     
     builder.Services.AddAuthorization();
