@@ -1,8 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 function LoginPage() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [accessToken, setAccessToken] = useState("");
+    const [registerNickname, setRegisterNickName] = useState("");
+    const [registerPassword, setRegisterPassword] = useState("");
+    const [registerEmail, setRegisterEmail] = useState("");
     async function handleSubmit(event){
         event.preventDefault();
 
@@ -30,13 +33,82 @@ function LoginPage() {
             alert("Ошибка входа - " + data.detail)
         }
     }
+    async function refreshAccessToken() {
+        const response = await fetch("http://localhost:5000/api/Auth/refresh", {
+            method: "POST",
+            credentials: "include"
+        });
+
+        if (!response.ok) {
+            console.log("Не удалось обновить токен:", response.status);
+            return;
+        }
+
+        const data = await response.json();
+
+        setAccessToken(data.accessToken);
+
+        console.log("Новый accessToken получен");
+    }
+    useEffect(() => {
+        refreshAccessToken();
+    }, []);
+
+    async function register(event) {
+        event.preventDefault();
+
+        const response = await fetch("http://localhost:5000/api/Auth/register", {
+            method: "POST",
+
+            headers: {
+                "Content-Type": "application/json"
+            },
+
+            credentials: "include",
+            body: JSON.stringify({
+                email: registerEmail,
+                nickName: registerNickname,
+                password: registerPassword
+            })
+        });
+        const data = await response.json();
+        console.log(data);
+        console.log(response);
+        if (response.ok) {
+            setAccessToken(data.accessToken);
+            alert("Регистрация успешна.")
+        } else {
+            alert("Ошибка регистрации - " + data.detail)
+        }
+    }
+
+
+
+    async function logout(){
+        const response = await fetch("http://localhost:5000/api/Auth/logout", {
+            method: "POST",
+            headers: {
+                Authorization: "Bearer " + accessToken
+            },
+            credentials: "include"
+        });
+        if(response.ok){
+            setAccessToken("");
+            alert("Вы вышли с аккаунта");
+        } else {
+            alert("Ошибка")
+        }
+    }
+
     async function loadMyQuizSets(){
         const response = await fetch("http://localhost:5000/api/QuizSets/my", {
             method: "GET",
 
             headers:{
                 Authorization: "Bearer " + accessToken
-            }
+            },
+
+            credentials: "include"
         });
         if (!response.ok) {
             console.log("Не удалось получить квизы:", response.status);
@@ -53,6 +125,15 @@ function LoginPage() {
     function handlePasswordChange(event){
         setPassword(event.target.value);
     }
+    function handleRegistrationEmailChange(event){
+        setRegisterEmail(event.target.value);
+    }
+    function handleRegisterNicknameChange(event){
+        setRegisterNickName(event.target.value);
+    }
+    function handleRegisterPasswordChange(event){
+        setRegisterPassword(event.target.value);
+    }
     return (
         <main>
             <h1>Вход в QuizArena</h1>
@@ -66,6 +147,19 @@ function LoginPage() {
 
                 <button type="submit">Войти</button>
                 <button type="button" onClick={loadMyQuizSets}>Мои квизы</button>
+                <button type="button" onClick={logout}>Выйти</button>
+            </form>
+            <p>Зарегистрируйтесь в QuizArena</p>
+            <form onSubmit={register}>
+                <label htmlFor="registerEmail">Введите Email:</label><br />
+                <input type="email" id="registerEmail" value={registerEmail} onChange={handleRegistrationEmailChange} /><br />
+
+                <label htmlFor="registerNickname">Придумайте никнейм:</label><br />
+                <input type="text" id="registerNickname" value={registerNickname} onChange={handleRegisterNicknameChange} /><br />
+
+                <label htmlFor="registerPassword">Введите пароль:</label><br />
+                <input type="password" id="registerPassword" value={registerPassword} onChange={handleRegisterPasswordChange}/><br />
+                <button type="submit">Зарегистрироваться</button>
             </form>
         </main>
     )
