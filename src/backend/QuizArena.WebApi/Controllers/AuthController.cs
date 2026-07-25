@@ -1,6 +1,8 @@
 using Mediator;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using QuizArena.Application.Features.Auth.Login;
+using QuizArena.Application.Features.Auth.Logout;
 using QuizArena.Application.Features.Auth.RefreshToken;
 using QuizArena.Application.Features.Auth.Register;
 
@@ -70,5 +72,19 @@ public sealed class AuthController(IMediator mediator) : ApiController(mediator)
             SameSite = SameSiteMode.Strict,
             Expires = DateTimeOffset.UtcNow.AddDays(7)
         });
+    }
+
+    [HttpPost("logout")]
+    [Authorize]
+    public async Task<IActionResult> Logout(CancellationToken ct = default)
+    {
+        var refreshToken = Request.Cookies["refresh_token"];
+
+        if (!string.IsNullOrEmpty(refreshToken))
+            await Mediator.Send(new LogoutCommand(refreshToken), ct);
+        
+        Response.Cookies.Delete("refresh_token");
+        
+        return NoContent();
     }
 }
