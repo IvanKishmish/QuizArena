@@ -6,8 +6,10 @@ using QuizArena.Domain.Enums;
 namespace QuizArena.Application.Features.QuizSets.Commands.DeleteQuizSet;
 
 public sealed class DeleteQuizSetCommandHandler
-(IAppDbContext context,
-    ICurrentUserService currentUser)
+(
+    IAppDbContext context,
+    ICurrentUserService currentUser,
+    IQuestionStore questionStore)
 : ICommandHandler<DeleteQuizSetCommand, ErrorOr<Deleted>>
 {
     public async ValueTask<ErrorOr<Deleted>> Handle(DeleteQuizSetCommand command, CancellationToken ct = default)
@@ -27,6 +29,8 @@ public sealed class DeleteQuizSetCommandHandler
             return Error.Validation("QuizSet.NotAvailableToDelete", "You can't delete the public quiz set.");
         
         context.QuizSets.Remove(quizSet);
+
+        await questionStore.DeleteByQuizSetIdAsync(quizSet.Id, ct);
         
         await context.SaveChangesAsync(ct);
 

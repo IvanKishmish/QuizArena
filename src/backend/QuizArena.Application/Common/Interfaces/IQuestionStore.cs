@@ -8,4 +8,5 @@ public interface IQuestionStore
     Task<List<Question>> GetByQuizSetIdAsync(Guid quizSetId, CancellationToken ct = default);
     Task<Question?> GetByIdAsync(Guid quizSetId, Guid questionId, CancellationToken ct = default);
     Task DeleteAsync(Guid quizSetId, Guid questionId, CancellationToken ct = default);
+    Task DeleteByQuizSetIdAsync(Guid quizSetId, CancellationToken ct = default);
 }
