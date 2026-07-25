@@ -1,4 +1,6 @@
 using Telegram.Bot;
+using TelegramBot.Application.Common;
+using TelegramBot.Application.Contracts.Api;
 using TelegramBot.Application.Conversations;
 using TelegramBot.Application.Interfaces;
 using TelegramBot.Bot.Keyboards;
@@ -11,8 +13,12 @@ public sealed class AdminCommandHandler(
     IBotStatsService statsService,
     IMaintenanceModeService maintenanceMode,
     IBroadcastService broadcastService,
-    IConversationStateStore stateStore)
+    IConversationStateStore stateStore,
+    IQuizArenaApiClient apiClient,
+    MenuMessenger menu)
 {
+    private const int PageSize = 10;
+
     public async Task ShowStatsAsync(UpdateContext context, CancellationToken ct)
     {
         if (!context.IsAdmin) return;
@@ -70,4 +76,122 @@ public sealed class AdminCommandHandler(
         await maintenanceMode.SetAsync(enabled, ct);
         await botClient.SendMessage(context.ChatId, enabled ? "Режим обслуговування увімкнено." : "Режим обслуговування вимкнено.", cancellationToken: ct);
     }
+
+    public async Task ShowDashboardAsync(UpdateContext context, CancellationToken ct)
+    {
+        if (!context.IsAdmin) return;
+
+        var result = await apiClient.GetDashboardAsync(context.ChatId, ct);
+        if (!result.IsSuccess)
+        {
+            await botClient.SendMessage(context.ChatId, DescribeAdminError(result.Error!), cancellationToken: ct);
+            return;
+        }
+
+        var stats = result.Value!;
+        await botClient.SendMessage(context.ChatId,
+            "📊 *QuizArena — панель адміністратора*\n" +
+            $"Користувачів: {stats.TotalUsers}\n" +
+            $"Квізів усього: {stats.TotalQuizSets}\n" +
+            $"Опубліковано: {stats.TotalPublishedQuizSets}\n" +
+            $"Зіграно ігор: {stats.TotalGamesPlayed}",
+            parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown, cancellationToken: ct);
+    }
+
+    public async Task ShowUsersAsync(UpdateContext context, int page, CancellationToken ct)
+    {
+        if (!context.IsAdmin) return;
+
+        var result = await apiClient.GetUsersAsync(context.ChatId, page, PageSize, ct);
+        if (!result.IsSuccess)
+        {
+            await botClient.SendMessage(context.ChatId, DescribeAdminError(result.Error!), cancellationToken: ct);
+            return;
+        }
+
+        var paged = result.Value!;
+        if (paged.Items.Count == 0)
+        {
+            await botClient.SendMessage(context.ChatId, "Користувачів не знайдено.", cancellationToken: ct);
+            return;
+        }
+
+        var lines = paged.Items.Select(u =>
+            $"{(u.IsBanned ? "🚫" : "✅")} *{u.Nickname}* — {u.Email}\nID: `{u.Id}`, з {u.RegisteredAt:yyyy-MM-dd}");
+
+        await menu.ShowAsync(context.ChatId,
+            $"👥 *Користувачі* (стор. {paged.PageNumber}/{Math.Max(paged.TotalPages, 1)})\n\n" + string.Join("\n\n", lines),
+            KeyboardFactory.AdminUsersList(paged.Items, paged.PageNumber, Math.Max(paged.TotalPages, 1)),
+            ct, Telegram.Bot.Types.Enums.ParseMode.Markdown);
+    }
+
+    public async Task BanUserAsync(UpdateContext context, Guid userId, int page, CancellationToken ct)
+    {
+        if (!context.IsAdmin) return;
+
+        var result = await apiClient.BanUserAsync(context.ChatId, userId, ct);
+        if (!result.IsSuccess)
+            await botClient.SendMessage(context.ChatId, DescribeAdminError(result.Error!), cancellationToken: ct);
+
+        await ShowUsersAsync(context, page, ct);
+    }
+
+    public async Task UnbanUserAsync(UpdateContext context, Guid userId, int page, CancellationToken ct)
+    {
+        if (!context.IsAdmin) return;
+
+        var result = await apiClient.UnbanUserAsync(context.ChatId, userId, ct);
+        if (!result.IsSuccess)
+            await botClient.SendMessage(context.ChatId, DescribeAdminError(result.Error!), cancellationToken: ct);
+
+        await ShowUsersAsync(context, page, ct);
+    }
+
+    public async Task ShowQuizSetsAsync(UpdateContext context, int page, CancellationToken ct)
+    {
+        if (!context.IsAdmin) return;
+
+        var result = await apiClient.GetQuizSetsForModerationAsync(context.ChatId, page, PageSize, ct);
+        if (!result.IsSuccess)
+        {
+            await botClient.SendMessage(context.ChatId, DescribeAdminError(result.Error!), cancellationToken: ct);
+            return;
+        }
+
+        var paged = result.Value!;
+        if (paged.Items.Count == 0)
+        {
+            await botClient.SendMessage(context.ChatId, "Квізів не знайдено.", cancellationToken: ct);
+            return;
+        }
+
+        var lines = paged.Items.Select(q =>
+            $"{(q.Visibility == QuizVisibility.Public ? "🟢" : "⚪")} *{q.Title}*\nВласник: `{q.OwnerId}`, створено {q.CreatedAt:yyyy-MM-dd}");
+
+        await menu.ShowAsync(context.ChatId,
+            $"🗂 *Модерація квізів* (стор. {paged.PageNumber}/{Math.Max(paged.TotalPages, 1)})\n\n" + string.Join("\n\n", lines),
+            KeyboardFactory.AdminQuizSetsList(paged.Items, paged.PageNumber, Math.Max(paged.TotalPages, 1)),
+            ct, Telegram.Bot.Types.Enums.ParseMode.Markdown);
+    }
+
+    public async Task DeleteQuizSetAsync(UpdateContext context, Guid quizSetId, int page, CancellationToken ct)
+    {
+        if (!context.IsAdmin) return;
+
+        var result = await apiClient.DeleteAnyQuizSetAsync(context.ChatId, quizSetId, ct);
+        if (!result.IsSuccess)
+            await botClient.SendMessage(context.ChatId, DescribeAdminError(result.Error!), cancellationToken: ct);
+
+        await ShowQuizSetsAsync(context, page, ct);
+    }
+
+    private static string DescribeAdminError(ApiError error) => error.Kind switch
+    {
+        ApiErrorKind.Forbidden =>
+            "QuizArena відхилила запит (403). Ти в списку адмінів бота, але акаунт, під яким ти залогінений у боті, " +
+            "не має ролі Admin на бекенді — зайди під акаунтом, якому цю роль видано.",
+        ApiErrorKind.Unauthorized => "Спочатку залогінься в QuizArena (🔑 Увійти), потім повтори команду.",
+        ApiErrorKind.Transport => "QuizArena тимчасово недоступна. Спробуй ще раз за хвилину.",
+        _ => "Не вдалось виконати дію."
+    };
 }

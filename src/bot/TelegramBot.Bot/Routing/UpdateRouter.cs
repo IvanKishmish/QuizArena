@@ -85,6 +85,12 @@ public sealed class UpdateRouter(
             return;
         }
 
+        if (text is "📜 Історія ігор")
+        {
+            await quizMenuHandler.ShowGameHistoryAsync(context, 1, ct);
+            return;
+        }
+
         var convo = await stateStore.GetAsync(context.ChatId, ct);
         await RouteConversationMessageAsync(context, convo, text, ct);
     }
@@ -145,6 +151,10 @@ public sealed class UpdateRouter(
                 await authHandler.LogoutAsync(context, ct);
                 return;
 
+            case "/history":
+                await quizMenuHandler.ShowGameHistoryAsync(context, 1, ct);
+                return;
+
             case "/admin_stats":
                 await adminHandler.ShowStatsAsync(context, ct);
                 return;
@@ -159,6 +169,18 @@ public sealed class UpdateRouter(
 
             case "/admin_maintenance_off":
                 await adminHandler.SetMaintenanceAsync(context, enabled: false, ct);
+                return;
+
+            case "/admin_dashboard":
+                await adminHandler.ShowDashboardAsync(context, ct);
+                return;
+
+            case "/admin_users":
+                await adminHandler.ShowUsersAsync(context, 1, ct);
+                return;
+
+            case "/admin_quizsets":
+                await adminHandler.ShowQuizSetsAsync(context, 1, ct);
                 return;
 
             default:
@@ -215,6 +237,33 @@ public sealed class UpdateRouter(
             var parts = data["q:delete:".Length..].Split(':');
             await botClient.SendMessage(context.ChatId, "Видалити це питання назавжди?",
                 replyMarkup: KeyboardFactory.ConfirmDeleteQuestion(Guid.Parse(parts[0]), Guid.Parse(parts[1])), cancellationToken: ct);
+        }
+        else if (data.StartsWith("history:"))
+        {
+            await quizMenuHandler.ShowGameHistoryAsync(context, int.Parse(data["history:".Length..]), ct);
+        }
+        else if (data.StartsWith("admin:users:"))
+        {
+            await adminHandler.ShowUsersAsync(context, int.Parse(data["admin:users:".Length..]), ct);
+        }
+        else if (data.StartsWith("admin:ban:"))
+        {
+            var parts = data["admin:ban:".Length..].Split(':');
+            await adminHandler.BanUserAsync(context, Guid.Parse(parts[0]), int.Parse(parts[1]), ct);
+        }
+        else if (data.StartsWith("admin:unban:"))
+        {
+            var parts = data["admin:unban:".Length..].Split(':');
+            await adminHandler.UnbanUserAsync(context, Guid.Parse(parts[0]), int.Parse(parts[1]), ct);
+        }
+        else if (data.StartsWith("admin:quizsets:"))
+        {
+            await adminHandler.ShowQuizSetsAsync(context, int.Parse(data["admin:quizsets:".Length..]), ct);
+        }
+        else if (data.StartsWith("admin:delquiz:"))
+        {
+            var parts = data["admin:delquiz:".Length..].Split(':');
+            await adminHandler.DeleteQuizSetAsync(context, Guid.Parse(parts[0]), int.Parse(parts[1]), ct);
         }
         else if (data.StartsWith("quiz:publish:"))
         {

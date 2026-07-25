@@ -10,7 +10,7 @@ public static class KeyboardFactory
             ? new[]
             {
                 new[] { new KeyboardButton("🗂 Мої квізи"), new KeyboardButton("🌐 Каталог") },
-                new[] { new KeyboardButton("🎮 Приєднатись до гри") },
+                new[] { new KeyboardButton("🎮 Приєднатись до гри"), new KeyboardButton("📜 Історія ігор") },
                 new[] { new KeyboardButton("🚪 Вийти") },
             }
             : new[]
@@ -78,6 +78,52 @@ public static class KeyboardFactory
 
     public static InlineKeyboardMarkup ConfirmDeleteQuestion(Guid quizId, Guid questionId) =>
         YesNo($"q:delete_confirm:{quizId}:{questionId}", $"q:delete_cancel:{quizId}");
+
+    public static InlineKeyboardMarkup AdminUsersList(IReadOnlyList<AdminUserSummary> users, int page, int totalPages)
+    {
+        var rows = users
+            .Select(u => new[]
+            {
+                u.IsBanned
+                    ? InlineKeyboardButton.WithCallbackData($"✅ Розбанити {Truncate(u.Nickname, 24)}", $"admin:unban:{u.Id}:{page}")
+                    : InlineKeyboardButton.WithCallbackData($"🚫 Забанити {Truncate(u.Nickname, 24)}", $"admin:ban:{u.Id}:{page}")
+            })
+            .ToList();
+
+        AddPaginationRow(rows, "admin:users:", page, totalPages);
+        return new InlineKeyboardMarkup(rows);
+    }
+
+    public static InlineKeyboardMarkup AdminQuizSetsList(IReadOnlyList<AdminQuizSetSummary> quizzes, int page, int totalPages)
+    {
+        var rows = quizzes
+            .Select(q => new[]
+            {
+                InlineKeyboardButton.WithCallbackData($"🗑 {Truncate(q.Title, 30)}", $"admin:delquiz:{q.Id}:{page}")
+            })
+            .ToList();
+
+        AddPaginationRow(rows, "admin:quizsets:", page, totalPages);
+        return new InlineKeyboardMarkup(rows);
+    }
+
+    public static InlineKeyboardMarkup GameHistoryList(int page, int totalPages)
+    {
+        var rows = new List<InlineKeyboardButton[]>();
+        AddPaginationRow(rows, "history:", page, totalPages);
+        return new InlineKeyboardMarkup(rows);
+    }
+
+    private static void AddPaginationRow(List<InlineKeyboardButton[]> rows, string callbackPrefix, int page, int totalPages)
+    {
+        var nav = new List<InlineKeyboardButton>();
+        if (page > 1) nav.Add(InlineKeyboardButton.WithCallbackData("⬅️", $"{callbackPrefix}{page - 1}"));
+        if (page < totalPages) nav.Add(InlineKeyboardButton.WithCallbackData("➡️", $"{callbackPrefix}{page + 1}"));
+        if (nav.Count > 0) rows.Add(nav.ToArray());
+    }
+
+    private static string Truncate(string text, int maxLength) =>
+        text.Length > maxLength ? text[..maxLength] + "…" : text;
 
     public static InlineKeyboardMarkup YesNo(string yesCallback, string noCallback) => new(new[]
     {

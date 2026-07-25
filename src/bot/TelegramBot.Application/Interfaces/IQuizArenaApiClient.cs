@@ -40,4 +40,16 @@ public interface IQuizArenaApiClient
     Task<ApiResult<CreateGameRoomResponse>> CreateGameRoomAsync(long chatId, CreateGameRoomRequest request, CancellationToken ct);
     Task<ApiResult<JoinGameRoomResponse>> JoinGameRoomAsync(long chatId, string roomCode, JoinGameRoomRequest request, CancellationToken ct);
     Task<ApiResult<object?>> StartGameAsync(long chatId, string roomCode, CancellationToken ct);
+
+    // ---- QuizArena admin (backend role "Admin" — requires the bot_admin's linked
+    // QuizArena account to itself have that role; being a bot_admin alone is not enough) ----
+    Task<ApiResult<PagedResponse<AdminUserSummary>>> GetUsersAsync(long chatId, int pageNumber, int pageSize, CancellationToken ct);
+    Task<ApiResult<object?>> BanUserAsync(long chatId, Guid userId, CancellationToken ct);
+    Task<ApiResult<object?>> UnbanUserAsync(long chatId, Guid userId, CancellationToken ct);
+    Task<ApiResult<PagedResponse<AdminQuizSetSummary>>> GetQuizSetsForModerationAsync(long chatId, int pageNumber, int pageSize, CancellationToken ct);
+    Task<ApiResult<object?>> DeleteAnyQuizSetAsync(long chatId, Guid quizSetId, CancellationToken ct);
+    Task<ApiResult<AdminDashboardStats>> GetDashboardAsync(long chatId, CancellationToken ct);
+
+    // ---- Game history ----
+    Task<ApiResult<PagedResponse<GameHistorySummary>>> GetMyGameHistoryAsync(long chatId, int pageNumber, int pageSize, CancellationToken ct);
 }

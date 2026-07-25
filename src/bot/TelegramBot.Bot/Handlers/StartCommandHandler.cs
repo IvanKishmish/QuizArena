@@ -35,6 +35,7 @@ public sealed class StartCommandHandler(ITelegramBotClient botClient, IConversat
             lines.Add("*Для власника акаунту:*");
             lines.Add("🗂 Мої квізи — список і керування власними квізами");
             lines.Add("🌐 Каталог — публічні квізи інших користувачів");
+            lines.Add("📜 Історія ігор — твої минулі результати");
             lines.Add("/newquiz — створити новий квіз");
             lines.Add("/logout — вийти з акаунту");
         }
@@ -49,11 +50,16 @@ public sealed class StartCommandHandler(ITelegramBotClient botClient, IConversat
         if (context.IsAdmin)
         {
             lines.Add("");
-            lines.Add("*Адмін\\-команди:*");
+            lines.Add("*Адмін\\-команди бота:*");
             lines.Add("/admin\\_stats — статистика бота");
             lines.Add("/admin\\_broadcast — розсилка всім користувачам");
             lines.Add("/admin\\_maintenance\\_on — увімкнути режим обслуговування");
             lines.Add("/admin\\_maintenance\\_off — вимкнути режим обслуговування");
+            lines.Add("");
+            lines.Add("*Адмін\\-команди QuizArena:*");
+            lines.Add("/admin\\_dashboard — загальна статистика системи");
+            lines.Add("/admin\\_users — користувачі, бан/розбан");
+            lines.Add("/admin\\_quizsets — модерація квізів, примусове видалення");
         }
 
         await botClient.SendMessage(context.ChatId, string.Join('\n', lines),

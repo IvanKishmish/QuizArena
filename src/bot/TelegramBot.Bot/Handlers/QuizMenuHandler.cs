@@ -9,6 +9,35 @@ namespace TelegramBot.Bot.Handlers;
 public sealed class QuizMenuHandler(ITelegramBotClient botClient, IQuizArenaApiClient apiClient, MenuMessenger menu)
 {
     private const int PublicPageSize = 5;
+    private const int HistoryPageSize = 10;
+
+    public async Task ShowGameHistoryAsync(UpdateContext context, int page, CancellationToken ct)
+    {
+        var result = await apiClient.GetMyGameHistoryAsync(context.ChatId, page, HistoryPageSize, ct);
+        if (!result.IsSuccess)
+        {
+            await botClient.SendMessage(context.ChatId, "Не вдалось отримати історію ігор.", cancellationToken: ct);
+            return;
+        }
+
+        var paged = result.Value!;
+        if (paged.Items.Count == 0)
+        {
+            await botClient.SendMessage(context.ChatId, "Ти ще не грав жодної гри.", cancellationToken: ct);
+            return;
+        }
+
+        var lines = paged.Items.Select(h =>
+        {
+            var medal = h.Placement switch { 1 => "🥇", 2 => "🥈", 3 => "🥉", _ => $"#{h.Placement}" };
+            return $"{medal} *{h.QuizSetTitle}*\nБали: {h.FinalScore} · {h.PlayedAt:yyyy-MM-dd HH:mm}";
+        });
+
+        await menu.ShowAsync(context.ChatId,
+            $"📜 *Історія ігор* (стор. {paged.PageNumber}/{Math.Max(paged.TotalPages, 1)})\n\n" + string.Join("\n\n", lines),
+            KeyboardFactory.GameHistoryList(paged.PageNumber, Math.Max(paged.TotalPages, 1)),
+            ct, ParseMode.Markdown);
+    }
 
     public async Task ShowMyQuizzesAsync(UpdateContext context, CancellationToken ct)
     {

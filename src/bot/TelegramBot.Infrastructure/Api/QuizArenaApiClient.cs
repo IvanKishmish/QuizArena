@@ -66,9 +66,6 @@ public sealed class QuizArenaApiClient : IQuizArenaApiClient
         using var response = await _http.SendAsync(msg, ct);
         return await HandleAuthResponseAsync(chatId, response, ct);
     }
-    
-    public Task<ApiResult<object?>> LogoutAsync(long chatId, CancellationToken ct) =>
-        SendAuthorizedAsync<object?>(chatId, HttpMethod.Post, "/api/auth/logout", null, ct);
 
     private async Task<ApiResult<TokenPairResult>> HandleAuthResponseAsync(long chatId, HttpResponseMessage response, CancellationToken ct)
     {
@@ -190,8 +187,39 @@ public sealed class QuizArenaApiClient : IQuizArenaApiClient
         // Joining works with or without a token (guest vs registered) — never force a refresh loop for guests.
         SendAuthorizedAsync<JoinGameRoomResponse>(chatId, HttpMethod.Post, $"/api/gamerooms/{roomCode}/join", request, ct, requiresAuth: false);
 
+    public Task<ApiResult<object?>> LogoutAsync(long chatId, CancellationToken ct) =>
+        SendAuthorizedAsync<object?>(chatId, HttpMethod.Post, "/api/auth/logout", null, ct);
+
     public Task<ApiResult<object?>> StartGameAsync(long chatId, string roomCode, CancellationToken ct) =>
         SendAuthorizedNoContentAsync(chatId, HttpMethod.Post, $"/api/gamerooms/{roomCode}/start", null, ct);
+
+    // ---------------------------------------------------------------- Admin
+
+    public Task<ApiResult<PagedResponse<AdminUserSummary>>> GetUsersAsync(long chatId, int pageNumber, int pageSize, CancellationToken ct) =>
+        SendAuthorizedAsync<PagedResponse<AdminUserSummary>>(
+            chatId, HttpMethod.Get, $"/api/admin/users?pageNumber={pageNumber}&pageSize={pageSize}", null, ct);
+
+    public Task<ApiResult<object?>> BanUserAsync(long chatId, Guid userId, CancellationToken ct) =>
+        SendAuthorizedNoContentAsync(chatId, HttpMethod.Post, $"/api/admin/users/{userId}/ban", null, ct);
+
+    public Task<ApiResult<object?>> UnbanUserAsync(long chatId, Guid userId, CancellationToken ct) =>
+        SendAuthorizedNoContentAsync(chatId, HttpMethod.Post, $"/api/admin/users/{userId}/unban", null, ct);
+
+    public Task<ApiResult<PagedResponse<AdminQuizSetSummary>>> GetQuizSetsForModerationAsync(long chatId, int pageNumber, int pageSize, CancellationToken ct) =>
+        SendAuthorizedAsync<PagedResponse<AdminQuizSetSummary>>(
+            chatId, HttpMethod.Get, $"/api/admin/quizsets?pageNumber={pageNumber}&pageSize={pageSize}", null, ct);
+
+    public Task<ApiResult<object?>> DeleteAnyQuizSetAsync(long chatId, Guid quizSetId, CancellationToken ct) =>
+        SendAuthorizedNoContentAsync(chatId, HttpMethod.Delete, $"/api/admin/quizsets/{quizSetId}", null, ct);
+
+    public Task<ApiResult<AdminDashboardStats>> GetDashboardAsync(long chatId, CancellationToken ct) =>
+        SendAuthorizedAsync<AdminDashboardStats>(chatId, HttpMethod.Get, "/api/admin/dashboard", null, ct);
+
+    // ---------------------------------------------------------------- Game history
+
+    public Task<ApiResult<PagedResponse<GameHistorySummary>>> GetMyGameHistoryAsync(long chatId, int pageNumber, int pageSize, CancellationToken ct) =>
+        SendAuthorizedAsync<PagedResponse<GameHistorySummary>>(
+            chatId, HttpMethod.Get, $"/api/gamehistory/my?pageNumber={pageNumber}&pageSize={pageSize}", null, ct);
 
     // ---------------------------------------------------------------- Core send pipeline
 
