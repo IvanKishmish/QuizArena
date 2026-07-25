@@ -9,17 +9,19 @@ namespace QuizArena.WebApi.Services;
 
 public sealed class TokenService(IConfiguration configuration) : ITokenService
 {
-    public string GenerateAccessToken(Guid userId)
+    public string GenerateAccessToken(Guid userId, IReadOnlyList<string> roles)
     {
         var secret = configuration["Jwt:Secret"]!;
         var issuer = configuration["Jwt:Issuer"]!;
         var audience = configuration["Jwt:Audience"]!;
         var expiryMinutes = int.Parse(configuration["Jwt:ExpiryMinutes"]!);
 
-        var claims = new[]
+        var claims = new List<Claim>
         {
             new Claim(JwtRegisteredClaimNames.Sub, userId.ToString()),
         };
+        
+        claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role)));
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);

@@ -1,0 +1,101 @@
+using Telegram.Bot;
+using TelegramBot.Application.Interfaces;
+using TelegramBot.Bot.Keyboards;
+using TelegramBot.Bot.Middleware;
+
+namespace TelegramBot.Bot.Handlers;
+
+public sealed class QuizMenuHandler(ITelegramBotClient botClient, IQuizArenaApiClient apiClient)
+{
+    private const int PublicPageSize = 5;
+
+    public async Task ShowMyQuizzesAsync(UpdateContext context, CancellationToken ct)
+    {
+        var result = await apiClient.GetMyQuizSetsAsync(context.ChatId, ct);
+        if (!result.IsSuccess)
+        {
+            await botClient.SendMessage(context.ChatId, "Не вдалось отримати список квізів. Спробуй ще раз.", cancellationToken: ct);
+            return;
+        }
+
+        var quizzes = result.Value!;
+        if (quizzes.Count == 0)
+        {
+            await botClient.SendMessage(context.ChatId, "У тебе ще немає квізів.",
+                replyMarkup: KeyboardFactory.MyQuizzesList([], 1, 1), cancellationToken: ct);
+            return;
+        }
+
+        var items = quizzes.Select(q => (q.Id, q.Title, q.IsPublished)).ToList();
+        await botClient.SendMessage(context.ChatId, "Твої квізи:",
+            replyMarkup: KeyboardFactory.MyQuizzesList(items, 1, 1), cancellationToken: ct);
+    }
+
+    public async Task ShowPublicCatalogAsync(UpdateContext context, int page, CancellationToken ct)
+    {
+        var result = await apiClient.GetPublicQuizSetsAsync(context.ChatId, page, PublicPageSize, ct);
+        if (!result.IsSuccess)
+        {
+            await botClient.SendMessage(context.ChatId, "Каталог тимчасово недоступний.", cancellationToken: ct);
+            return;
+        }
+
+        var paged = result.Value!;
+        if (paged.Items.Count == 0)
+        {
+            await botClient.SendMessage(context.ChatId, "Публічних квізів поки немає.", cancellationToken: ct);
+            return;
+        }
+
+        var items = paged.Items.Select(q => (q.Id, q.Title)).ToList();
+        await botClient.SendMessage(context.ChatId, $"Публічний каталог (стор. {paged.PageNumber}/{Math.Max(paged.TotalPages, 1)}):",
+            replyMarkup: KeyboardFactory.PublicCatalog(items, paged.PageNumber, Math.Max(paged.TotalPages, 1)), cancellationToken: ct);
+    }
+
+    public async Task ShowQuizDetailsAsync(UpdateContext context, Guid quizId, CancellationToken ct)
+    {
+        var result = await apiClient.GetQuizSetAsync(context.ChatId, quizId, ct);
+        if (!result.IsSuccess)
+        {
+            await botClient.SendMessage(context.ChatId, "Не вдалось відкрити квіз.", cancellationToken: ct);
+            return;
+        }
+
+        var quiz = result.Value!;
+        var status = quiz.IsPublished ? "🟢 опубліковано" : "⚪ чернетка";
+        await botClient.SendMessage(context.ChatId, $"*{Escape(quiz.Title)}*\n{Escape(quiz.Description)}\n\nСтатус: {status}",
+            parseMode: Telegram.Bot.Types.Enums.ParseMode.MarkdownV2,
+            replyMarkup: KeyboardFactory.QuizDetailsActions(quiz.Id, quiz.IsPublished), cancellationToken: ct);
+    }
+
+    public async Task PublishAsync(UpdateContext context, Guid quizId, bool publish, CancellationToken ct)
+    {
+        var result = publish
+            ? await apiClient.PublishQuizSetAsync(context.ChatId, quizId, ct)
+            : await apiClient.UnpublishQuizSetAsync(context.ChatId, quizId, ct);
+
+        await botClient.SendMessage(context.ChatId,
+            result.IsSuccess
+                ? (publish ? "Квіз опубліковано ✅" : "Квіз знято з публікації.")
+                : "Не вдалось змінити статус квізу.",
+            cancellationToken: ct);
+
+        if (result.IsSuccess)
+            await ShowQuizDetailsAsync(context, quizId, ct);
+    }
+
+    public async Task ConfirmDeleteAsync(UpdateContext context, Guid quizId, CancellationToken ct)
+    {
+        await botClient.SendMessage(context.ChatId, "Видалити цей квіз назавжди?",
+            replyMarkup: KeyboardFactory.YesNo($"quiz:delete_confirm:{quizId}", "quiz:delete_cancel"), cancellationToken: ct);
+    }
+
+    public async Task DeleteAsync(UpdateContext context, Guid quizId, CancellationToken ct)
+    {
+        var result = await apiClient.DeleteQuizSetAsync(context.ChatId, quizId, ct);
+        await botClient.SendMessage(context.ChatId, result.IsSuccess ? "Квіз видалено." : "Не вдалось видалити квіз.", cancellationToken: ct);
+    }
+
+    private static string Escape(string text) =>
+        text.Replace("_", "\\_").Replace("*", "\\*").Replace("[", "\\[").Replace("`", "\\`");
+}

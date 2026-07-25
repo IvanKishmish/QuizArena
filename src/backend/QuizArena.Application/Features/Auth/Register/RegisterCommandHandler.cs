@@ -5,7 +5,6 @@ using Mediator;
 using QuizArena.Application.Common;
 using QuizArena.Application.Features.Auth.Common;
 using QuizArena.Application.Features.Auth.Events;
-using QuizArena.Application.Features.GameRooms.Events;
 using QuizArena.Domain.Entities;
 
 namespace QuizArena.Application.Features.Auth.Register;
@@ -42,7 +41,9 @@ public sealed class RegisterCommandHandler(
         dbContext.Players.Add(playerResult.Value);
         await dbContext.SaveChangesAsync(ct);
         
-        var accessToken = tokenService.GenerateAccessToken(userIdResult.Value);
+        var roles = await identityService.GetUserRolesAsync(userIdResult.Value, ct);
+
+        var accessToken = tokenService.GenerateAccessToken(userIdResult.Value, roles);
         var refreshToken = tokenService.GenerateRefreshToken();
         var refreshTokenHash = TokenHasher.Hash(refreshToken);
 

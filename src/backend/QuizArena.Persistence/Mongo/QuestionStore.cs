@@ -42,4 +42,7 @@ public sealed class QuestionStore(IMongoDatabase db) : IQuestionStore
 
     public async Task DeleteAsync(Guid quizSetId, Guid questionId, CancellationToken ct = default)
         => await _collection.DeleteOneAsync(d => d.QuizSetId == quizSetId && d.Id == questionId, ct);
+
+    public async Task DeleteByQuizSetIdAsync(Guid quizSetId, CancellationToken ct = default)
+        => await _collection.DeleteManyAsync(q => q.QuizSetId == quizSetId, ct);
 }

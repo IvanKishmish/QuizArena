@@ -64,16 +64,37 @@ try
                 ValidateLifetime = true,
                 ClockSkew = TimeSpan.Zero
             };
+            
+            options.Events = new JwtBearerEvents
+            {
+                OnMessageReceived = context =>
+                {
+                    var accessToken = context.Request.Query["access_token"];
+                    var path = context.HttpContext.Request.Path;
+
+                    if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+                        context.Token = accessToken;
+
+                    return Task.CompletedTask;
+                }
+            };
         });
+
+    var corsOriginString = builder.Configuration["CORS_ALLOWED_ORIGINS"];
+    
+    var allowedOrigins = !string.IsNullOrEmpty(corsOriginString)
+        ? corsOriginString.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        : [];
 
     builder.Services.AddCors(options =>
     {
         options.AddDefaultPolicy(policy =>
-            policy
-                .SetIsOriginAllowed(_ => true) 
+        {
+            policy.WithOrigins(allowedOrigins)
                 .AllowAnyHeader()
                 .AllowAnyMethod()
-                .AllowCredentials());
+                .AllowCredentials();
+        });
     });
     
     builder.Services.AddAuthorization();
@@ -81,6 +102,7 @@ try
     var app = builder.Build();
 
     await app.ApplyMigrationsAsync();
+    await app.SeedAdminAsync();
     
     app.UseExceptionHandler();
     app.UseResponseCompression();

@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/Core/">
+    <Project Path="src/TelegramBot.Domain/TelegramBot.Domain.csproj" />
+    <Project Path="src/TelegramBot.Application/TelegramBot.Application.csproj" Type="Classic C#" />
+  </Folder>
+  <Folder Name="/Infrastructure/">
+    <Project Path="src/TelegramBot.Infrastructure/TelegramBot.Infrastructure.csproj" Type="Classic C#" />
+  </Folder>
+  <Folder Name="/Presentation/">
+    <Project Path="src/TelegramBot.Bot/TelegramBot.Bot.csproj" Type="Classic C#" />
+  </Folder>
+</Solution>

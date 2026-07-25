@@ -35,15 +35,26 @@ public sealed class IdentityService(
     public async Task<ErrorOr<Guid>> ValidateCredentialsAsync(string email, string password, CancellationToken ct = default)
     {
         var user = await userManager.FindByEmailAsync(email);
-        
         if(user is null)
             return Error.Unauthorized("Auth.InvalidCredentials", "Invalid email or password.");
         
-        var isValid = await userManager.CheckPasswordAsync(user, password);
+        if(await userManager.IsLockedOutAsync(user))
+        {
+            var isBanned = user.LockoutEnd == DateTimeOffset.MaxValue;
+            return isBanned
+                ? Error.Forbidden("Auth.UserBanned", "This account has been banned.")
+                : Error.Forbidden("Auth.TemporarilyLocked", $"Too many failed attempts. Try again after {user.LockoutEnd:u}.");
+        }
         
+        var isValid = await userManager.CheckPasswordAsync(user, password);
         if (!isValid)
+        {
+            await userManager.AccessFailedAsync(user);
             return Error.Unauthorized("Auth.InvalidCredentials", "Invalid email or password.");
+        }
 
+        await userManager.ResetAccessFailedCountAsync(user);
+        
         return user.Id;
     }
 
@@ -91,5 +102,42 @@ public sealed class IdentityService(
         return await userManager.Users
             .Where(u => userIds.Contains(u.Id) && u.Email != null)
             .ToDictionaryAsync(u => u.Id, u => u.Email!, ct);
+    }
+
+    public async Task<IReadOnlyList<string>> GetUserRolesAsync(Guid userId, CancellationToken ct = default)
+    {
+        var user = await userManager.FindByIdAsync(userId.ToString());
+
+        if (user is null)
+            return [];
+        
+        var roles = await userManager.GetRolesAsync(user);
+
+        return roles.ToList();
+    }
+
+    public async Task<ErrorOr<Updated>> BanUserAsync(Guid userId, CancellationToken ct = default)
+    {
+        var user = await userManager.FindByIdAsync(userId.ToString());
+        
+        if (user is null)
+            return Error.NotFound("User.NotFound", "User not found.");
+        
+        await userManager.SetLockoutEnabledAsync(user, true);
+        await userManager.SetLockoutEndDateAsync(user, DateTimeOffset.MaxValue);
+
+        return Result.Updated;
+    }
+
+    public async Task<ErrorOr<Updated>> UnbanUserAsync(Guid userId, CancellationToken ct = default)
+    {
+        var user = await userManager.FindByIdAsync(userId.ToString());
+        
+        if (user is null)
+            return Error.NotFound("User.NotFound", "User not found.");
+        
+        await userManager.SetLockoutEndDateAsync(user, null);
+        
+        return Result.Updated;
     }
 }

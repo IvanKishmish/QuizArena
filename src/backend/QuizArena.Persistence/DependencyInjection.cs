@@ -7,6 +7,7 @@ using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Driver;
 using QuizArena.Application.Common.Interfaces;
+using QuizArena.Application.Common.Interfaces.IdentityQueryService;
 using QuizArena.Application.Common.Interfaces.Leaderboard;
 using QuizArena.Persistence.Context;
 using QuizArena.Persistence.Identity;
@@ -80,6 +81,7 @@ public static class DependencyInjection
         services.AddScoped<IRoomCodeGenerator, RoomCodeGenerator>();
         services.AddScoped<ILeaderboardStore, LeaderboardStore>();
         services.AddScoped<IConnectionTracker, ConnectionTracker>();
+        services.AddScoped<IIdentityUserQueryService, IdentityUserQueryService>();
 
         return services;
     }
