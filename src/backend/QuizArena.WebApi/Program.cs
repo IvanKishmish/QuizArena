@@ -88,6 +88,7 @@ try
     var app = builder.Build();
 
     await app.ApplyMigrationsAsync();
+    await app.SeedAdminAsync();
     
     app.UseExceptionHandler();
     app.UseResponseCompression();
