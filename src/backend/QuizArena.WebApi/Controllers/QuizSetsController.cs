@@ -24,6 +24,7 @@ public sealed class QuizSetsController(IMediator mediator) : ApiController(media
     }
 
     [HttpGet("{id:guid}")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetById(Guid id, CancellationToken ct = default)
     {
         var result = await Mediator.Send(new GetQuizSetByIdQuery(id), ct);
