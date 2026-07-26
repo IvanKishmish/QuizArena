@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
-function LoginPage() {
+import { Link } from "react-router";
+
+function LoginPage({ accessToken, setAccessToken }) {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
-    const [accessToken, setAccessToken] = useState("");
-    const [registerNickname, setRegisterNickName] = useState("");
-    const [registerPassword, setRegisterPassword] = useState("");
-    const [registerEmail, setRegisterEmail] = useState("");
+
+
     async function handleSubmit(event){
         event.preventDefault();
 
@@ -54,33 +54,7 @@ function LoginPage() {
         refreshAccessToken();
     }, []);
 
-    async function register(event) {
-        event.preventDefault();
 
-        const response = await fetch("http://localhost:5000/api/Auth/register", {
-            method: "POST",
-
-            headers: {
-                "Content-Type": "application/json"
-            },
-
-            credentials: "include",
-            body: JSON.stringify({
-                email: registerEmail,
-                nickName: registerNickname,
-                password: registerPassword
-            })
-        });
-        const data = await response.json();
-        console.log(data);
-        console.log(response);
-        if (response.ok) {
-            setAccessToken(data.accessToken);
-            alert("Регистрация успешна.")
-        } else {
-            alert("Ошибка регистрации - " + data.detail)
-        }
-    }
 
 
 
@@ -125,15 +99,7 @@ function LoginPage() {
     function handlePasswordChange(event){
         setPassword(event.target.value);
     }
-    function handleRegistrationEmailChange(event){
-        setRegisterEmail(event.target.value);
-    }
-    function handleRegisterNicknameChange(event){
-        setRegisterNickName(event.target.value);
-    }
-    function handleRegisterPasswordChange(event){
-        setRegisterPassword(event.target.value);
-    }
+
     return (
         <main>
             <h1>Вход в QuizArena</h1>
@@ -147,19 +113,10 @@ function LoginPage() {
 
                 <button type="submit">Войти</button>
                 <button type="button" onClick={loadMyQuizSets}>Мои квизы</button>
-                <button type="button" onClick={logout}>Выйти</button>
-            </form>
-            <p>Зарегистрируйтесь в QuizArena</p>
-            <form onSubmit={register}>
-                <label htmlFor="registerEmail">Введите Email:</label><br />
-                <input type="email" id="registerEmail" value={registerEmail} onChange={handleRegistrationEmailChange} /><br />
+                <button type="button" onClick={logout}>Выйти</button><br />
 
-                <label htmlFor="registerNickname">Придумайте никнейм:</label><br />
-                <input type="text" id="registerNickname" value={registerNickname} onChange={handleRegisterNicknameChange} /><br />
-
-                <label htmlFor="registerPassword">Введите пароль:</label><br />
-                <input type="password" id="registerPassword" value={registerPassword} onChange={handleRegisterPasswordChange}/><br />
-                <button type="submit">Зарегистрироваться</button>
+                <br /><span>Нет аккаунта? - </span>
+                <Link to="/register">Зарегистрироваться</Link>
             </form>
         </main>
     )
