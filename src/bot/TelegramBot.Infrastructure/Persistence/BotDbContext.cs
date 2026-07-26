@@ -21,6 +21,7 @@ public sealed class BotDbContext(DbContextOptions<BotDbContext> options) : DbCon
     public DbSet<TelegramBot.Domain.Entities.BotAdmin> BotAdmins => Set<TelegramBot.Domain.Entities.BotAdmin>();
     public DbSet<BroadcastLog> BroadcastLogs => Set<BroadcastLog>();
     public DbSet<BotUsageStat> UsageStats => Set<BotUsageStat>();
+    public DbSet<BotMessageLog> MessageLogs => Set<BotMessageLog>();
 
     // Required by IDataProtectionKeyContext — name/type must match exactly.
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
@@ -59,6 +60,17 @@ public sealed class BotDbContext(DbContextOptions<BotDbContext> options) : DbCon
         {
             e.ToTable("bot_usage_stats");
             e.HasKey(x => x.DateUtc);
+        });
+
+        builder.Entity<BotMessageLog>(e =>
+        {
+            e.ToTable("bot_message_logs");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.TelegramUsername).HasMaxLength(64);
+            e.Property(x => x.NickName).HasMaxLength(64);
+            e.Property(x => x.Text).HasMaxLength(4096);
+            e.HasIndex(x => x.ChatId);
+            e.HasIndex(x => x.SentAtUtc);
         });
     }
 }

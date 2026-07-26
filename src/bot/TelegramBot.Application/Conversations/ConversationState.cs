@@ -11,6 +11,7 @@ public enum ConversationFlow
     Registering,
     LoggingIn,
     CreatingQuiz,
+    EditingQuiz,
     AddingQuestion,
     AwaitingRoomCodeToJoin,
     AwaitingGuestDisplayName,
@@ -34,6 +35,10 @@ public enum ConversationStep
     // CreatingQuiz
     QuizTitle,
     QuizDescription,
+
+    // EditingQuiz (same shape as CreatingQuiz, reuses ConversationData.QuizTitle/QuizDescription)
+    EditQuizTitle,
+    EditQuizDescription,
 
     // AddingQuestion (loop: Text -> Type -> Options... -> next question or finish)
     QuestionText,

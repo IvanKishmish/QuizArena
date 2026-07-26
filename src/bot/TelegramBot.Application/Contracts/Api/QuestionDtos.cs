@@ -17,7 +17,7 @@ public sealed record AddQuestionRequest(
     int Points,
     IReadOnlyList<AnswerOptionRequest> Options);
 
-public sealed record AnswerOptionResponse(string Text, int OrderIndex);
+public sealed record AnswerOptionResponse(string Text, bool IsCorrect, int OrderIndex);
 
 public sealed record QuestionResponse(
     Guid Id,

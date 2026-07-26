@@ -22,6 +22,14 @@ public sealed class CreateQuizConversationHandler(
         await botClient.SendMessage(context.ChatId, "Назва квізу?", replyMarkup: KeyboardFactory.Remove(), cancellationToken: ct);
     }
 
+    public async Task StartEditAsync(UpdateContext context, Guid quizSetId, CancellationToken ct)
+    {
+        var convo = new ConversationContext { Flow = ConversationFlow.EditingQuiz, Step = ConversationStep.EditQuizTitle };
+        convo.Data.QuizSetId = quizSetId;
+        await stateStore.SetAsync(context.ChatId, convo, ct);
+        await botClient.SendMessage(context.ChatId, "Нова назва квізу?", replyMarkup: KeyboardFactory.Remove(), cancellationToken: ct);
+    }
+
     public async Task HandleMessageAsync(UpdateContext context, ConversationContext convo, string text, CancellationToken ct)
     {
         switch (convo.Step)
@@ -36,6 +44,18 @@ public sealed class CreateQuizConversationHandler(
             case ConversationStep.QuizDescription:
                 convo.Data.QuizDescription = text;
                 await CreateQuizAndAskFirstQuestionAsync(context, convo, ct);
+                return;
+
+            case ConversationStep.EditQuizTitle:
+                convo.Data.QuizTitle = text;
+                convo.Step = ConversationStep.EditQuizDescription;
+                await stateStore.SetAsync(context.ChatId, convo, ct);
+                await botClient.SendMessage(context.ChatId, "Новий опис квізу?", cancellationToken: ct);
+                return;
+
+            case ConversationStep.EditQuizDescription:
+                convo.Data.QuizDescription = text;
+                await SaveEditAsync(context, convo, ct);
                 return;
 
             case ConversationStep.QuestionText:
@@ -186,5 +206,17 @@ public sealed class CreateQuizConversationHandler(
         await stateStore.SetAsync(context.ChatId, convo, ct);
 
         await botClient.SendMessage(context.ChatId, "Квіз створено. Тепер додамо питання.\n\nТекст першого питання:", cancellationToken: ct);
+    }
+
+    private async Task SaveEditAsync(UpdateContext context, ConversationContext convo, CancellationToken ct)
+    {
+        var result = await apiClient.UpdateQuizSetAsync(context.ChatId, convo.Data.QuizSetId!.Value,
+            new UpdateQuizSetRequest(convo.Data.QuizTitle!, convo.Data.QuizDescription!), ct);
+
+        await stateStore.ClearAsync(context.ChatId, ct);
+
+        await botClient.SendMessage(context.ChatId,
+            result.IsSuccess ? "Квіз оновлено ✅" : "Не вдалось оновити квіз. Спробуй ще раз.",
+            cancellationToken: ct);
     }
 }

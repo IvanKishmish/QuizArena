@@ -1,4 +1,5 @@
 using TelegramBot.Bot.Handlers;
+using TelegramBot.Bot.Keyboards;
 using TelegramBot.Bot.Middleware;
 using TelegramBot.Bot.Routing;
 
@@ -10,6 +11,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddScoped<StartCommandHandler>();
         services.AddScoped<AuthConversationHandler>();
+        services.AddScoped<MenuMessenger>();
         services.AddScoped<QuizMenuHandler>();
         services.AddScoped<CreateQuizConversationHandler>();
         services.AddScoped<GameRoomHandler>();
@@ -24,6 +26,7 @@ public static class ServiceCollectionExtensions
         // Maintenance -> BannedDetection -> [router].
         services.AddScoped<IUpdateMiddleware, RateLimitingMiddleware>();
         services.AddScoped<IUpdateMiddleware, AuthContextMiddleware>();
+        services.AddScoped<IUpdateMiddleware, MessageLoggingMiddleware>();
         services.AddScoped<IUpdateMiddleware, MaintenanceModeMiddleware>();
         services.AddScoped<IUpdateMiddleware, BannedAccountDetectionMiddleware>();
         services.AddScoped<UpdatePipeline>();

@@ -38,6 +38,7 @@ public static class DependencyInjection
         services.AddScoped<ITokenStore>(sp => sp.GetRequiredService<EfTokenStore>());
 
         services.AddScoped<IConversationStateStore, RedisConversationStateStore>();
+        services.AddScoped<IMenuMessageStore, RedisMenuMessageStore>();
         services.AddScoped<IBotAdminService, EfBotAdminService>();
         services.AddSingleton<IMaintenanceModeService, RedisMaintenanceModeService>();
         services.AddScoped<IBotStatsService, BotStatsService>();

@@ -1,13 +1,43 @@
 using Telegram.Bot;
+using Telegram.Bot.Types.Enums;
 using TelegramBot.Application.Interfaces;
 using TelegramBot.Bot.Keyboards;
 using TelegramBot.Bot.Middleware;
 
 namespace TelegramBot.Bot.Handlers;
 
-public sealed class QuizMenuHandler(ITelegramBotClient botClient, IQuizArenaApiClient apiClient)
+public sealed class QuizMenuHandler(ITelegramBotClient botClient, IQuizArenaApiClient apiClient, MenuMessenger menu)
 {
     private const int PublicPageSize = 5;
+    private const int HistoryPageSize = 10;
+
+    public async Task ShowGameHistoryAsync(UpdateContext context, int page, CancellationToken ct)
+    {
+        var result = await apiClient.GetMyGameHistoryAsync(context.ChatId, page, HistoryPageSize, ct);
+        if (!result.IsSuccess)
+        {
+            await botClient.SendMessage(context.ChatId, "Не вдалось отримати історію ігор.", cancellationToken: ct);
+            return;
+        }
+
+        var paged = result.Value!;
+        if (paged.Items.Count == 0)
+        {
+            await botClient.SendMessage(context.ChatId, "Ти ще не грав жодної гри.", cancellationToken: ct);
+            return;
+        }
+
+        var lines = paged.Items.Select(h =>
+        {
+            var medal = h.Placement switch { 1 => "🥇", 2 => "🥈", 3 => "🥉", _ => $"#{h.Placement}" };
+            return $"{medal} *{h.QuizSetTitle}*\nБали: {h.FinalScore} · {h.PlayedAt:yyyy-MM-dd HH:mm}";
+        });
+
+        await menu.ShowAsync(context.ChatId,
+            $"📜 *Історія ігор* (стор. {paged.PageNumber}/{Math.Max(paged.TotalPages, 1)})\n\n" + string.Join("\n\n", lines),
+            KeyboardFactory.GameHistoryList(paged.PageNumber, Math.Max(paged.TotalPages, 1)),
+            ct, ParseMode.Markdown);
+    }
 
     public async Task ShowMyQuizzesAsync(UpdateContext context, CancellationToken ct)
     {
@@ -21,14 +51,12 @@ public sealed class QuizMenuHandler(ITelegramBotClient botClient, IQuizArenaApiC
         var quizzes = result.Value!;
         if (quizzes.Count == 0)
         {
-            await botClient.SendMessage(context.ChatId, "У тебе ще немає квізів.",
-                replyMarkup: KeyboardFactory.MyQuizzesList([], 1, 1), cancellationToken: ct);
+            await menu.ShowAsync(context.ChatId, "У тебе ще немає квізів.", KeyboardFactory.MyQuizzesList([]), ct);
             return;
         }
 
         var items = quizzes.Select(q => (q.Id, q.Title, q.IsPublished)).ToList();
-        await botClient.SendMessage(context.ChatId, "Твої квізи:",
-            replyMarkup: KeyboardFactory.MyQuizzesList(items, 1, 1), cancellationToken: ct);
+        await menu.ShowAsync(context.ChatId, "Твої квізи:", KeyboardFactory.MyQuizzesList(items), ct);
     }
 
     public async Task ShowPublicCatalogAsync(UpdateContext context, int page, CancellationToken ct)
@@ -48,8 +76,9 @@ public sealed class QuizMenuHandler(ITelegramBotClient botClient, IQuizArenaApiC
         }
 
         var items = paged.Items.Select(q => (q.Id, q.Title)).ToList();
-        await botClient.SendMessage(context.ChatId, $"Публічний каталог (стор. {paged.PageNumber}/{Math.Max(paged.TotalPages, 1)}):",
-            replyMarkup: KeyboardFactory.PublicCatalog(items, paged.PageNumber, Math.Max(paged.TotalPages, 1)), cancellationToken: ct);
+        await menu.ShowAsync(context.ChatId,
+            $"Публічний каталог (стор. {paged.PageNumber}/{Math.Max(paged.TotalPages, 1)}):",
+            KeyboardFactory.PublicCatalog(items, paged.PageNumber, Math.Max(paged.TotalPages, 1)), ct);
     }
 
     public async Task ShowQuizDetailsAsync(UpdateContext context, Guid quizId, CancellationToken ct)
@@ -63,9 +92,39 @@ public sealed class QuizMenuHandler(ITelegramBotClient botClient, IQuizArenaApiC
 
         var quiz = result.Value!;
         var status = quiz.IsPublished ? "🟢 опубліковано" : "⚪ чернетка";
-        await botClient.SendMessage(context.ChatId, $"*{Escape(quiz.Title)}*\n{Escape(quiz.Description)}\n\nСтатус: {status}",
-            parseMode: Telegram.Bot.Types.Enums.ParseMode.MarkdownV2,
-            replyMarkup: KeyboardFactory.QuizDetailsActions(quiz.Id, quiz.IsPublished), cancellationToken: ct);
+        await menu.ShowAsync(context.ChatId,
+            $"*{Escape(quiz.Title)}*\n{Escape(quiz.Description)}\n\nСтатус: {status}",
+            KeyboardFactory.QuizDetailsActions(quiz.Id, quiz.IsPublished), ct, ParseMode.MarkdownV2);
+    }
+
+    public async Task ShowQuestionsAsync(UpdateContext context, Guid quizId, CancellationToken ct)
+    {
+        var result = await apiClient.GetQuestionsAsync(context.ChatId, quizId, ct);
+        if (!result.IsSuccess)
+        {
+            await botClient.SendMessage(context.ChatId, "Не вдалось отримати питання цього квізу.", cancellationToken: ct);
+            return;
+        }
+
+        var questions = result.Value!;
+        if (questions.Count == 0)
+        {
+            await menu.ShowAsync(context.ChatId, "У цього квізу поки немає питань.", KeyboardFactory.QuestionsList(quizId, []), ct);
+            return;
+        }
+
+        var items = questions.Select(q => (q.Id, q.Text)).ToList();
+        await menu.ShowAsync(context.ChatId, $"Питання квізу ({questions.Count}):", KeyboardFactory.QuestionsList(quizId, items), ct);
+    }
+
+    public async Task DeleteQuestionAsync(UpdateContext context, Guid quizId, Guid questionId, CancellationToken ct)
+    {
+        var result = await apiClient.DeleteQuestionAsync(context.ChatId, quizId, questionId, ct);
+
+        if (!result.IsSuccess)
+            await botClient.SendMessage(context.ChatId, "Не вдалось видалити питання.", cancellationToken: ct);
+
+        await ShowQuestionsAsync(context, quizId, ct);
     }
 
     public async Task PublishAsync(UpdateContext context, Guid quizId, bool publish, CancellationToken ct)
@@ -94,6 +153,7 @@ public sealed class QuizMenuHandler(ITelegramBotClient botClient, IQuizArenaApiC
     {
         var result = await apiClient.DeleteQuizSetAsync(context.ChatId, quizId, ct);
         await botClient.SendMessage(context.ChatId, result.IsSuccess ? "Квіз видалено." : "Не вдалось видалити квіз.", cancellationToken: ct);
+        await menu.ForgetAsync(context.ChatId, ct);
     }
 
     private static string Escape(string text) =>

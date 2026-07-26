@@ -5,6 +5,7 @@ using TelegramBot.Application.Contracts.Api;
 using TelegramBot.Application.Conversations;
 using TelegramBot.Application.Interfaces;
 using TelegramBot.Bot.Handlers;
+using TelegramBot.Bot.Keyboards;
 using TelegramBot.Bot.Middleware;
 
 namespace TelegramBot.Bot.Routing;
@@ -78,6 +79,18 @@ public sealed class UpdateRouter(
             return;
         }
 
+        if (text is "🚪 Вийти")
+        {
+            await authHandler.LogoutAsync(context, ct);
+            return;
+        }
+
+        if (text is "📜 Історія ігор")
+        {
+            await quizMenuHandler.ShowGameHistoryAsync(context, 1, ct);
+            return;
+        }
+
         var convo = await stateStore.GetAsync(context.ChatId, ct);
         await RouteConversationMessageAsync(context, convo, text, ct);
     }
@@ -90,7 +103,7 @@ public sealed class UpdateRouter(
                 await authHandler.HandleMessageAsync(context, convo, text, ct);
                 return;
 
-            case ConversationFlow.CreatingQuiz or ConversationFlow.AddingQuestion:
+            case ConversationFlow.CreatingQuiz or ConversationFlow.AddingQuestion or ConversationFlow.EditingQuiz:
                 await createQuizHandler.HandleMessageAsync(context, convo, text, ct);
                 return;
 
@@ -107,7 +120,7 @@ public sealed class UpdateRouter(
                 return;
 
             default:
-                await botClient.SendMessage(context.ChatId, "Не зрозумів. Скористайся меню або командою /start.", cancellationToken: ct);
+                await botClient.SendMessage(context.ChatId, "Не зрозумів. Скористайся меню, /start або /help.", cancellationToken: ct);
                 return;
         }
     }
@@ -122,12 +135,24 @@ public sealed class UpdateRouter(
                 await startHandler.HandleAsync(context, ct);
                 return;
 
+            case "/help":
+                await startHandler.HandleHelpAsync(context, ct);
+                return;
+
             case "/newquiz":
                 await createQuizHandler.StartAsync(context, ct);
                 return;
 
             case "/join":
                 await gameRoomHandler.StartJoinFlowAsync(context, ct);
+                return;
+
+            case "/logout":
+                await authHandler.LogoutAsync(context, ct);
+                return;
+
+            case "/history":
+                await quizMenuHandler.ShowGameHistoryAsync(context, 1, ct);
                 return;
 
             case "/admin_stats":
@@ -146,8 +171,20 @@ public sealed class UpdateRouter(
                 await adminHandler.SetMaintenanceAsync(context, enabled: false, ct);
                 return;
 
+            case "/admin_dashboard":
+                await adminHandler.ShowDashboardAsync(context, ct);
+                return;
+
+            case "/admin_users":
+                await adminHandler.ShowUsersAsync(context, 1, ct);
+                return;
+
+            case "/admin_quizsets":
+                await adminHandler.ShowQuizSetsAsync(context, 1, ct);
+                return;
+
             default:
-                await botClient.SendMessage(context.ChatId, "Невідома команда. /start — щоб побачити меню.", cancellationToken: ct);
+                await botClient.SendMessage(context.ChatId, "Невідома команда. /help — щоб побачити список команд.", cancellationToken: ct);
                 return;
         }
     }
@@ -159,12 +196,7 @@ public sealed class UpdateRouter(
 
         var convo = await stateStore.GetAsync(context.ChatId, ct);
 
-        if (data.StartsWith("quiz:mylist:"))
-        {
-            // pagination — page number in data, actual re-render delegated the same as first page for brevity
-            await quizMenuHandler.ShowMyQuizzesAsync(context, ct);
-        }
-        else if (data.StartsWith("quiz:open:"))
+        if (data.StartsWith("quiz:open:"))
         {
             await quizMenuHandler.ShowQuizDetailsAsync(context, Guid.Parse(data["quiz:open:".Length..]), ct);
         }
@@ -179,6 +211,59 @@ public sealed class UpdateRouter(
             convo.Data.QuizSetId = Guid.Parse(data["quiz:addq:".Length..]);
             await stateStore.SetAsync(context.ChatId, convo, ct);
             await botClient.SendMessage(context.ChatId, "Текст питання:", cancellationToken: ct);
+        }
+        else if (data.StartsWith("quiz:edit:"))
+        {
+            await createQuizHandler.StartEditAsync(context, Guid.Parse(data["quiz:edit:".Length..]), ct);
+        }
+        else if (data.StartsWith("quiz:questions:"))
+        {
+            await quizMenuHandler.ShowQuestionsAsync(context, Guid.Parse(data["quiz:questions:".Length..]), ct);
+        }
+        else if (data.StartsWith("q:noop:"))
+        {
+        }
+        else if (data.StartsWith("q:delete_confirm:"))
+        {
+            var parts = data["q:delete_confirm:".Length..].Split(':');
+            await quizMenuHandler.DeleteQuestionAsync(context, Guid.Parse(parts[0]), Guid.Parse(parts[1]), ct);
+        }
+        else if (data.StartsWith("q:delete_cancel:"))
+        {
+            await quizMenuHandler.ShowQuestionsAsync(context, Guid.Parse(data["q:delete_cancel:".Length..]), ct);
+        }
+        else if (data.StartsWith("q:delete:"))
+        {
+            var parts = data["q:delete:".Length..].Split(':');
+            await botClient.SendMessage(context.ChatId, "Видалити це питання назавжди?",
+                replyMarkup: KeyboardFactory.ConfirmDeleteQuestion(Guid.Parse(parts[0]), Guid.Parse(parts[1])), cancellationToken: ct);
+        }
+        else if (data.StartsWith("history:"))
+        {
+            await quizMenuHandler.ShowGameHistoryAsync(context, int.Parse(data["history:".Length..]), ct);
+        }
+        else if (data.StartsWith("admin:users:"))
+        {
+            await adminHandler.ShowUsersAsync(context, int.Parse(data["admin:users:".Length..]), ct);
+        }
+        else if (data.StartsWith("admin:ban:"))
+        {
+            var parts = data["admin:ban:".Length..].Split(':');
+            await adminHandler.BanUserAsync(context, Guid.Parse(parts[0]), int.Parse(parts[1]), ct);
+        }
+        else if (data.StartsWith("admin:unban:"))
+        {
+            var parts = data["admin:unban:".Length..].Split(':');
+            await adminHandler.UnbanUserAsync(context, Guid.Parse(parts[0]), int.Parse(parts[1]), ct);
+        }
+        else if (data.StartsWith("admin:quizsets:"))
+        {
+            await adminHandler.ShowQuizSetsAsync(context, int.Parse(data["admin:quizsets:".Length..]), ct);
+        }
+        else if (data.StartsWith("admin:delquiz:"))
+        {
+            var parts = data["admin:delquiz:".Length..].Split(':');
+            await adminHandler.DeleteQuizSetAsync(context, Guid.Parse(parts[0]), int.Parse(parts[1]), ct);
         }
         else if (data.StartsWith("quiz:publish:"))
         {
@@ -224,6 +309,14 @@ public sealed class UpdateRouter(
         else if (data == "quiz:finish")
         {
             await createQuizHandler.FinishAsync(context, convo, ct);
+        }
+        else if (data.StartsWith("catalog:page:"))
+        {
+            await quizMenuHandler.ShowPublicCatalogAsync(context, int.Parse(data["catalog:page:".Length..]), ct);
+        }
+        else if (data.StartsWith("catalog:open:"))
+        {
+            await quizMenuHandler.ShowQuizDetailsAsync(context, Guid.Parse(data["catalog:open:".Length..]), ct);
         }
         else if (data.StartsWith("room:create:"))
         {
