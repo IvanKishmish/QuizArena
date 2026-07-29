@@ -1,10 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link } from "react-router";
 
 function LoginPage({ accessToken, setAccessToken }) {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
-
 
     async function handleSubmit(event){
         event.preventDefault();
@@ -33,30 +32,6 @@ function LoginPage({ accessToken, setAccessToken }) {
             alert("Ошибка входа - " + data.detail)
         }
     }
-    async function refreshAccessToken() {
-        const response = await fetch("http://localhost:5000/api/Auth/refresh", {
-            method: "POST",
-            credentials: "include"
-        });
-
-        if (!response.ok) {
-            console.log("Не удалось обновить токен:", response.status);
-            return;
-        }
-
-        const data = await response.json();
-
-        setAccessToken(data.accessToken);
-
-        console.log("Новый accessToken получен");
-    }
-    useEffect(() => {
-        refreshAccessToken();
-    }, []);
-
-
-
-
 
     async function logout(){
         const response = await fetch("http://localhost:5000/api/Auth/logout", {
@@ -73,7 +48,6 @@ function LoginPage({ accessToken, setAccessToken }) {
             alert("Ошибка")
         }
     }
-
     async function loadMyQuizSets(){
         const response = await fetch("http://localhost:5000/api/QuizSets/my", {
             method: "GET",
