@@ -64,28 +64,28 @@ services:
     volumes:
       - ./logs:/app/logs
   
-  telegrambot:
-    build:
-      context: .
-      dockerfile: src/bot/TelegramBot.Bot/Dockerfile
-    container_name: quizarena-telegrambot
-    restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_started
-      webapi:
-        condition: service_started
-    env_file:
-      - .env.docker
-    ports:
-      - "8081:8080"
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8080/health" ]
-      interval: 30s
-      timeout: 5s
-      retries: 3
+#  telegrambot:
+#    build:
+#      context: .
+#      dockerfile: src/bot/TelegramBot.Bot/Dockerfile
+#    container_name: quizarena-telegrambot
+#    restart: unless-stopped
+#    depends_on:
+#      postgres:
+#        condition: service_healthy
+#      redis:
+#        condition: service_started
+#      webapi:
+#        condition: service_started
+#    env_file:
+#      - .env.docker
+#    ports:
+#      - "8081:8080"
+#    healthcheck:
+#      test: [ "CMD", "curl", "-f", "http://localhost:8080/health" ]
+#      interval: 30s
+#      timeout: 5s
+#      retries: 3
 
 
 volumes:
