@@ -1,11 +1,18 @@
-import { useState } from "react";
+import { 
+    useState,
+    type ChangeEvent,
+    type FormEvent
+} from "react";
 import { Link } from "react-router";
-
-function LoginPage({ accessToken, setAccessToken }) {
+type LoginPageProps = {
+    accessToken: string;
+    setAccessToken: (token: string) => void;
+};
+function LoginPage({ accessToken, setAccessToken }: LoginPageProps) {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
 
-    async function handleSubmit(event){
+    async function handleSubmit(event: FormEvent<HTMLFormElement>){
         event.preventDefault();
 
         const response = await fetch("http://localhost:5000/api/Auth/login", {
@@ -67,10 +74,10 @@ function LoginPage({ accessToken, setAccessToken }) {
         console.log(response);
         console.log(data);
     }
-    function handleEmailChange(event){
+    function handleEmailChange(event: ChangeEvent<HTMLInputElement>){
         setEmail(event.target.value);
     }
-    function handlePasswordChange(event){
+    function handlePasswordChange(event: ChangeEvent<HTMLInputElement>){
         setPassword(event.target.value);
     }
 

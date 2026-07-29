@@ -1,12 +1,18 @@
-import { useState } from "react";
+import { 
+    useState,
+    type ChangeEvent,
+    type FormEvent
+} from "react";
 import { Link } from "react-router";
-
-function RegistrationPage({ setAccessToken }){
+type RegistrationPageProps = {
+    setAccessToken: (token: string) => void;
+};
+function RegistrationPage({ setAccessToken }: RegistrationPageProps){
     const [registerNickname, setRegisterNickName] = useState("");
     const [registerPassword, setRegisterPassword] = useState("");
     const [registerEmail, setRegisterEmail] = useState("");
 
-    async function register(event) {
+    async function register(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
 
         const response = await fetch("http://localhost:5000/api/Auth/register", {
@@ -33,13 +39,13 @@ function RegistrationPage({ setAccessToken }){
             alert("Ошибка регистрации - " + data.detail)
         }
     }
-    function handleRegistrationEmailChange(event){
+    function handleRegistrationEmailChange(event: ChangeEvent<HTMLInputElement>){
         setRegisterEmail(event.target.value);
     }
-    function handleRegisterNicknameChange(event){
+    function handleRegisterNicknameChange(event: ChangeEvent<HTMLInputElement>){
         setRegisterNickName(event.target.value);
     }
-    function handleRegisterPasswordChange(event){
+    function handleRegisterPasswordChange(event: ChangeEvent<HTMLInputElement>){
         setRegisterPassword(event.target.value);
     }
     return(
