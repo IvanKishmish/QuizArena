@@ -35,6 +35,6 @@ public sealed class GameRoomStore(IConnectionMultiplexer redis) : IGameRoomStore
         return snapshot?.ToDomain();
     }
 
-    public async Task DeleteAsync(string roomCode, CancellationToken ct = default)
-        =>  await Database.KeyDeleteAsync(Key(roomCode)); 
+    public Task DeleteAsync(string roomCode, CancellationToken ct = default)
+        =>  Database.KeyDeleteAsync(Key(roomCode)); 
 }

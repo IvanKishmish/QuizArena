@@ -22,7 +22,7 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddPersistence(this IServiceCollection services, IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString("DB_CONNECTION_STRING");
+        var connectionString = configuration.GetConnectionString(ConfigurationKeys.DbConnectionString);
 
         services.AddScoped<UpdateAuditableEntitiesInterceptor>();
 
@@ -54,9 +54,9 @@ public static class DependencyInjection
         
         services.AddSingleton<IMongoDatabase>(_ =>
         {
-            var mongoConnectionString = configuration["Mongo:ConnectionString"] 
+            var mongoConnectionString = configuration[ConfigurationKeys.MongoConnectionString] 
                                         ?? throw new InvalidOperationException("Mongo connection string not found.");
-            var mongoDatabaseName = configuration["Mongo:DatabaseName"]
+            var mongoDatabaseName = configuration[ConfigurationKeys.MongoDatabaseName]
                                ?? throw new InvalidOperationException("Mongo database name not found.");
             
             var clientSettings = MongoClientSettings.FromConnectionString(mongoConnectionString);
@@ -71,7 +71,7 @@ public static class DependencyInjection
 
         services.AddSingleton<IConnectionMultiplexer>(_ =>
         {
-            var redisConnectionString = configuration["Redis:ConnectionString"]
+            var redisConnectionString = configuration[ConfigurationKeys.RedisConnectionString]
                 ?? throw new InvalidOperationException("Redis connection string not found.");
             
             return ConnectionMultiplexer.Connect(redisConnectionString);
