@@ -15,8 +15,9 @@ public sealed class ConnectionTracker(IConnectionMultiplexer redis)
     
     public async Task RegisterConnectionAsync(Guid participantId, string connectionId, CancellationToken ct = default)
     {
-        await Database.StringSetAsync(ParticipantKey(participantId), connectionId,ConnectionExpiration);
-        await Database.StringSetAsync(ConnectionKey(connectionId), participantId.ToString(),ConnectionExpiration);
+        await Task.WhenAll(
+            Database.StringSetAsync(ParticipantKey(participantId), connectionId, ConnectionExpiration),
+            Database.StringSetAsync(ConnectionKey(connectionId), participantId.ToString(), ConnectionExpiration));
     }
 
     public async Task<string?> GetConnectionAsync(Guid participantId, CancellationToken ct = default)
