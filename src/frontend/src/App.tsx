@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import LoginPage from './pages/LoginPage'
 import RegistrationPage from './pages/RegistrationPage'
 import CreateQuizPage from './pages/CreateQuizPage';
-
+import MyQuizSetsPage from './pages/MyQuizSetsPage';
 
 
 function App() {
@@ -27,6 +27,7 @@ function App() {
       <Route path="/login" element={<LoginPage accessToken={accessToken} setAccessToken={setAccessToken} />} />
       <Route path="/register" element={<RegistrationPage setAccessToken={setAccessToken} />} />
       <Route path="/create-quiz" element={<CreateQuizPage accessToken={accessToken} />} />
+      <Route path="/my-quizzes" element={<MyQuizSetsPage accessToken={accessToken} />}/>
     </Routes>
   )
 
