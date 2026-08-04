@@ -1,4 +1,5 @@
 import { useState, type ChangeEvent, type FormEvent } from "react";
+import { useNavigate } from "react-router";
 
 type CreateQuizPageProps = {
     accessToken: string;
@@ -7,6 +8,8 @@ type CreateQuizPageProps = {
 
 
 function CreateQuizPage({ accessToken }: CreateQuizPageProps) {
+    const navigate = useNavigate();
+
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
 
@@ -20,8 +23,6 @@ function CreateQuizPage({ accessToken }: CreateQuizPageProps) {
 
     async function handleSubmit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
-        console.log("Есть accessToken:", Boolean(accessToken));
-        console.log("accessToken:", accessToken);
         const response = await fetch("http://localhost:5000/api/QuizSets", {
             method: "POST",
             headers: {
@@ -42,6 +43,8 @@ function CreateQuizPage({ accessToken }: CreateQuizPageProps) {
         const data = await response.json();
 
         console.log("Квиз создан:", data);
+
+        navigate("/my-quizzes");
     }
     return (
         <main>
