@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useEffect } from "react";
+import { Link } from "react-router";
 
 type QuizSet = {
     id: string;
@@ -25,7 +26,6 @@ function MyQuizSetsPage({ accessToken }: MyQuizSetsPageProps) {
         }
 
         const data = await response.json();
-
         setQuizSets(data);
     }
     useEffect(() => {
@@ -46,7 +46,12 @@ function MyQuizSetsPage({ accessToken }: MyQuizSetsPageProps) {
             )}
             {quizSets.map((quiz) => (
                 <div key={quiz.id}>
-                    <h2>{quiz.title}</h2>
+                    <h2>
+                        <Link to={`/quiz/${quiz.id}`}>
+                            {quiz.title}
+                        </Link>
+                    </h2>
+
                     <p>{quiz.description}</p>
                 </div>
             ))}
