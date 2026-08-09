@@ -5,6 +5,7 @@ import RegistrationPage from './pages/RegistrationPage'
 import CreateQuizPage from './pages/CreateQuizPage';
 import MyQuizSetsPage from './pages/MyQuizSetsPage';
 import QuizDetailsPage from './pages/QuizDetailsPage';
+import NotFoundPage from './pages/NotFoundPage';
 
 
 function App() {
@@ -29,8 +30,8 @@ function App() {
       <Route path="/register" element={<RegistrationPage setAccessToken={setAccessToken} />} />
       <Route path="/create-quiz" element={<CreateQuizPage accessToken={accessToken} />} />
       <Route path="/my-quizzes" element={<MyQuizSetsPage accessToken={accessToken} />}/>
-      <Route path="/quiz/:id" element={<QuizDetailsPage accessToken={accessToken} />}
-      />
+      <Route path="/quiz/:id" element={<QuizDetailsPage accessToken={accessToken} />}/>
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
   )
 
