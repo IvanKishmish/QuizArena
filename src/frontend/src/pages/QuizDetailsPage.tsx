@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { type ChangeEvent, type FormEvent } from "react";
+import type { Question } from "../types/question";
+import QuestionCard from "../components/QuestionCard";
 
 type QuizDetailsPageProps = {
     accessToken: string;
@@ -10,21 +12,6 @@ type QuizSet = {
     id: string;
     title: string;
     description: string;
-};
-
-type AnswerOption = {
-    text: string;
-    isCorrect: boolean;
-    orderIndex: number;
-};
-
-type Question = {
-    id: string;
-    text: string;
-    questionType: number;
-    timeLimitSeconds: number;
-    points: number;
-    options: AnswerOption[];
 };
 
 function QuizDetailsPage({ accessToken }: QuizDetailsPageProps) {
@@ -301,12 +288,13 @@ function QuizDetailsPage({ accessToken }: QuizDetailsPageProps) {
         await loadQuestions();
     }
 
-    async function loadQuestions(){
+    const loadQuestions = useCallback(async () => {
         if (!id || !accessToken) {
             return;
         }
 
-        const response = await fetch(`http://localhost:5000/api/quizsets/${id}/questions`,
+        const response = await fetch(
+            `http://localhost:5000/api/quizsets/${id}/questions`,
             {
                 method: "GET",
                 headers: {
@@ -324,7 +312,7 @@ function QuizDetailsPage({ accessToken }: QuizDetailsPageProps) {
         const data = await response.json();
         console.log(data);
         setQuestions(data);
-    }
+    }, [id, accessToken]);
 
     function openQuestion(){
 
@@ -379,7 +367,7 @@ function QuizDetailsPage({ accessToken }: QuizDetailsPageProps) {
 
         loadQuiz();
         loadQuestions();
-    }, [id, accessToken]);
+    }, [id, accessToken, loadQuestions]);
 
     return (
         <main>
@@ -691,25 +679,11 @@ function QuizDetailsPage({ accessToken }: QuizDetailsPageProps) {
             )}
 
             {questions.map((question) => (
-                <div key={question.id}>
-                    <h3>{question.text}</h3>
-                    <p>Баллы: {question.points}</p>
-                    <p>Время: {question.timeLimitSeconds} сек.</p>
-
-
-                    {question.options.map((option) => (
-                        <p key={option.orderIndex}>
-                            {option.text}
-                            {option.isCorrect && " — правильный"}
-                        </p>
-                    ))}
-                    <button
-                        type="button"
-                        onClick={() => handleDeleteQuestion(question.id)}
-                    >
-                        Удалить вопрос
-                    </button>
-                </div>
+                <QuestionCard
+                    key={question.id}
+                    question={question}
+                    onDelete={handleDeleteQuestion}
+                />
             ))}
         </main>
     );
