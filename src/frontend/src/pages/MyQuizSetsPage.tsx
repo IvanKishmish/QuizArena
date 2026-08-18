@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router";
+import { apiRequest } from "../api/client";
 
 type QuizSet = {
     id: string;
@@ -12,25 +12,26 @@ type MyQuizSetsPageProps = {
 };
 function MyQuizSetsPage({ accessToken }: MyQuizSetsPageProps) {
     const[quizSets, setQuizSets] = useState<QuizSet[]>([]);
-    async function loadMyQuizSets(){
-        const response = await fetch("http://localhost:5000/api/QuizSets/my", {
-            method: "GET",
-            headers: {
-                Authorization: "Bearer " + accessToken
-            },
-            credentials: "include"
-        });
-        if (!response.ok) {
-            console.log("Не удалось получить квизы:", response.status);
-            return;
-        }
 
-        const data = await response.json();
-        setQuizSets(data);
-    }
     useEffect(() => {
         if (!accessToken) {
             return;
+        }
+
+        async function loadMyQuizSets(){
+            const response = await apiRequest("/api/QuizSets/my", {
+                method: "GET",
+                headers: {
+                    Authorization: "Bearer " + accessToken
+                }
+            });
+            if (!response.ok) {
+                console.log("Не удалось получить квизы:", response.status);
+                return;
+            }
+
+            const data = await response.json();
+            setQuizSets(data);
         }
 
         loadMyQuizSets();
