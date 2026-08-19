@@ -25,7 +25,8 @@ function MyQuizSetsPage({ accessToken, setAccessToken }: MyQuizSetsPageProps) {
                 method: "GET",
             },
             accessToken,
-            setAccessToken
+            setAccessToken,
+            () => setAccessToken("")
         );
             if (!response.ok) {
                 console.log("Не удалось получить квизы:", response.status);

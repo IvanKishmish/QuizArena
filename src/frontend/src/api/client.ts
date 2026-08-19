@@ -7,6 +7,7 @@ export async function apiRequest(
     options?: RequestInit,
     accessToken?: string,
     onTokenRefresh?: (token: string) => void,
+    onAuthFailure?: () => void,
     retry = true
 ) {
     const response = await fetch(API_URL + path, {
@@ -29,6 +30,7 @@ export async function apiRequest(
                 options,
                 newAccessToken,
                 onTokenRefresh,
+                onAuthFailure,
                 false
             );
         }
