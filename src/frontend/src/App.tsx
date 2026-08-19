@@ -28,7 +28,7 @@ function App() {
       <Route path="/login" element={<LoginPage accessToken={accessToken} setAccessToken={setAccessToken} />} />
       <Route path="/register" element={<RegistrationPage setAccessToken={setAccessToken} />} />
       <Route path="/create-quiz" element={<CreateQuizPage accessToken={accessToken} />} />
-      <Route path="/my-quizzes" element={<MyQuizSetsPage accessToken={accessToken} />}/>
+      <Route path="/my-quizzes" element={<MyQuizSetsPage accessToken={accessToken} setAccessToken={setAccessToken}/>}/>
       <Route path="/quiz/:id" element={<QuizDetailsPage accessToken={accessToken} />}/>
       <Route path="*" element={<NotFoundPage />} />
     </Routes>

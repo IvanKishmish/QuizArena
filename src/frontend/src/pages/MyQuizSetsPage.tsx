@@ -9,8 +9,9 @@ type QuizSet = {
 }
 type MyQuizSetsPageProps = {
     accessToken: string;
+    setAccessToken: (token: string) => void;
 };
-function MyQuizSetsPage({ accessToken }: MyQuizSetsPageProps) {
+function MyQuizSetsPage({ accessToken, setAccessToken }: MyQuizSetsPageProps) {
     const[quizSets, setQuizSets] = useState<QuizSet[]>([]);
 
     useEffect(() => {
@@ -19,12 +20,13 @@ function MyQuizSetsPage({ accessToken }: MyQuizSetsPageProps) {
         }
 
         async function loadMyQuizSets(){
-            const response = await apiRequest("/api/QuizSets/my", {
+            const response = await apiRequest("/api/QuizSets/my", 
+            {
                 method: "GET",
-                headers: {
-                    Authorization: "Bearer " + accessToken
-                }
-            });
+            },
+            accessToken,
+            setAccessToken
+        );
             if (!response.ok) {
                 console.log("Не удалось получить квизы:", response.status);
                 return;
@@ -35,7 +37,7 @@ function MyQuizSetsPage({ accessToken }: MyQuizSetsPageProps) {
         }
 
         loadMyQuizSets();
-    }, [accessToken]);
+    }, [accessToken, setAccessToken]);
 
     return (
         <main>
