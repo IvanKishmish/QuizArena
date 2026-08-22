@@ -7,18 +7,13 @@ namespace QuizArena.Persistence.Mongo;
 
 public sealed class QuestionStore(IMongoDatabase db) : IQuestionStore
 {
-    private readonly IMongoCollection<QuestionDocument> _collection 
+    private readonly IMongoCollection<QuestionDocument> _collection
         = db.GetCollection<QuestionDocument>("questions");
 
     public async Task InsertAsync(Guid quizSetId, Question question, CancellationToken ct = default)
     {
-        var document = new QuestionDocument
-        {
-            Id = question.Id,
-            QuizSetId = quizSetId,
-            Question = question
-        };
-        
+        var document = question.ToDocument(quizSetId);
+
         await _collection.InsertOneAsync(document, cancellationToken: ct);
     }
 
@@ -27,8 +22,8 @@ public sealed class QuestionStore(IMongoDatabase db) : IQuestionStore
         var documents = await _collection
             .Find(d => d.QuizSetId == quizSetId)
             .ToListAsync(ct);
-        
-        return documents.Select(d => d.Question).ToList();
+
+        return documents.Select(d => d.ToDomain()).ToList();
     }
 
     public async Task<Question?> GetByIdAsync(Guid quizSetId, Guid questionId, CancellationToken ct = default)
@@ -36,8 +31,8 @@ public sealed class QuestionStore(IMongoDatabase db) : IQuestionStore
         var document = await _collection
             .Find(d => d.QuizSetId == quizSetId && d.Id == questionId)
             .FirstOrDefaultAsync(ct);
-        
-        return document?.Question;
+
+        return document?.ToDomain();
     }
 
     public async Task DeleteAsync(Guid quizSetId, Guid questionId, CancellationToken ct = default)
