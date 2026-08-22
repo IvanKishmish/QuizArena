@@ -17,6 +17,9 @@ public sealed class GlobalExceptionHandler(
         Exception exception,
         CancellationToken cancellationToken = default)
     {
+        if (httpContext.Response.HasStarted)
+            return false;
+
         logger.LogError(exception, "Unhandled exception occured: {Message}", exception.Message);
 
         (int statusCode, string title) = exception switch
@@ -49,16 +52,17 @@ public sealed class GlobalExceptionHandler(
 
             TimeoutException => (StatusCodes.Status504GatewayTimeout, "Timeout"),
             NotSupportedException => (StatusCodes.Status400BadRequest, "Not Supported"),
-            InvalidOperationException => (StatusCodes.Status409Conflict, "Invalid Operation"),
 
             _ => (StatusCodes.Status500InternalServerError, "Internal Server Error")
         };
 
-        string detail = environment.IsDevelopment()
+        var detail = environment.IsDevelopment()
             ? exception.ToString()
-            : statusCode == StatusCodes.Status500InternalServerError
-                ? "An unexpected error occurred. Please try again later."
-                : exception.Message;
+            : exception switch
+            {
+                FluentValidation.ValidationException or ArgumentException => exception.Message,
+                _ => GenericDetailFor(statusCode)
+            };
 
         var problemDetails = new ProblemDetails
         {
@@ -72,10 +76,22 @@ public sealed class GlobalExceptionHandler(
         problemDetails.Extensions["traceId"] = httpContext.TraceIdentifier;
 
         httpContext.Response.StatusCode = statusCode;
+        httpContext.Response.ContentType = "application/problem+json";
         await httpContext.Response.WriteAsJsonAsync(problemDetails, cancellationToken);
 
         return true;
     }
+
+    private static string GenericDetailFor(int statusCode) => statusCode switch
+    {
+        StatusCodes.Status400BadRequest => "The request was invalid.",
+        StatusCodes.Status401Unauthorized => "Authentication is required.",
+        StatusCodes.Status404NotFound => "The requested resource was not found.",
+        StatusCodes.Status409Conflict => "The request could not be completed due to a conflict.",
+        StatusCodes.Status499ClientClosedRequest => "The request was cancelled.",
+        >= 500 and < 600 => "An unexpected error occurred. Please try again later.",
+        _ => "The request could not be completed."
+    };
 
     private static bool IsUniqueConstraintViolation(DbUpdateException exception) =>
         exception.InnerException is Npgsql.PostgresException { SqlState: "23505" };
