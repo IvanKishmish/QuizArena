@@ -1,4 +1,3 @@
-using System.Text.Json.Serialization;
 using QuizArena.Domain.Common;
 using QuizArena.Domain.Entities.Models;
 using QuizArena.Domain.Enums;
@@ -27,6 +26,8 @@ public sealed class GameRoom : TransientEntity
     
     public DateTimeOffset? FinishedAt { get; private set; }
 
+    public long Version { get; private set; }
+
     private GameRoom()
     { } // ef
 
@@ -47,7 +48,8 @@ public sealed class GameRoom : TransientEntity
         DateTimeOffset? currentQuestionStartedAt,
         List<Participant> participants,
         DateTimeOffset? startedAt,
-        DateTimeOffset? finishedAt) : base(id)
+        DateTimeOffset? finishedAt,
+        long version) : base(id)
     {
         RoomCode = roomCode;
         QuizSetId = quizSetId;
@@ -58,6 +60,7 @@ public sealed class GameRoom : TransientEntity
         _participants = participants;
         StartedAt = startedAt;
         FinishedAt = finishedAt;
+        Version = version;
     }
 
     public static ErrorOr<GameRoom> Create(GameRoomCreationParams args)
@@ -70,10 +73,15 @@ public sealed class GameRoom : TransientEntity
         return new GameRoom(Guid.CreateVersion7(), args);
     }
 
+    public const int MaxParticipants = 100;
+
     public ErrorOr<Updated> AddParticipant(Guid? userId, Guid? guestId, string displayName)
     {
         if (Status != GameRoomStatus.Waiting)
             return Error.Validation("GameRoom.NotAcceptingParticipants", "Cannot join a room that has already started or finished.");
+
+        if (_participants.Count >= MaxParticipants)
+            return Error.Validation("GameRoom.RoomFull", $"This room has reached the maximum of {MaxParticipants} participants.");
 
         var alreadyJoined = _participants.Any(p =>
             (userId is not null && p.UserId == userId) ||
@@ -105,7 +113,8 @@ public sealed class GameRoom : TransientEntity
         
         Status = GameRoomStatus.InProgress;
         StartedAt = DateTimeOffset.UtcNow;
-        CurrentQuestionIndex = 0;
+
+        CurrentQuestionIndex = -1;
 
         return Result.Updated;
     }

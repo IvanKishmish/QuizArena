@@ -23,7 +23,6 @@ public sealed class QuizSetTests
         result.Value.Title.Should().Be(args.Title);
         result.Value.Description.Should().Be(args.Description);
         result.Value.Visibility.Should().Be(Visibility.Private);
-        result.Value.Questions.Should().BeEmpty();
     }
  
     [Theory]
@@ -59,67 +58,12 @@ public sealed class QuizSetTests
         result.IsError.Should().BeTrue();
         result.Errors.Should().Contain(e => e.Code == "QuizSet.DescriptionRequired");
     }
- 
-    [Fact]
-    public void AddQuestion_WithValidArgs_AddsQuestionToList()
-    {
-        //Arrange
-        var quizSet = CreateQuizSet();
- 
-        //Act
-        var result = quizSet.AddQuestion(ValidQuestionArgs());
- 
-        //Assert
-        result.IsError.Should().BeFalse();
-        quizSet.Questions.Should().HaveCount(1);
-    }
- 
-    [Fact]
-    public void AddQuestion_WithInvalidArgs_ReturnsErrorAndDoesNotAddQuestion()
-    {
-        //Arrange
-        var quizSet = CreateQuizSet();
-        var invalidArgs = ValidQuestionArgs() with { Text = "" };
- 
-        //Act
-        var result = quizSet.AddQuestion(invalidArgs);
- 
-        //Assert
-        result.IsError.Should().BeTrue();
-        quizSet.Questions.Should().BeEmpty();
-    }
- 
-    [Fact]
-    public void RemoveQuestion_WhenQuestionExists_RemovesIt()
-    {
-        //Arrange
-        var quizSet = CreateQuizSet();
-        quizSet.AddQuestion(ValidQuestionArgs());
-        var questionId = quizSet.Questions[0].Id;
- 
-        //Act
-        var result = quizSet.RemoveQuestion(questionId);
- 
-        //Assert
-        result.IsError.Should().BeFalse();
-        quizSet.Questions.Should().BeEmpty();
-    }
- 
-    [Fact]
-    public void RemoveQuestion_WhenQuestionDoesNotExist_ReturnsNotFoundError()
-    {
-        //Arrange
-        var quizSet = CreateQuizSet();
- 
-        //Act
-        var result = quizSet.RemoveQuestion(Guid.CreateVersion7());
- 
-        //Assert
-        result.IsError.Should().BeTrue();
-        result.FirstError.Type.Should().Be(ErrorType.NotFound);
-        result.FirstError.Code.Should().Be("QuizSet.QuestionNotFound");
-    }
- 
+
+    // AddQuestion/RemoveQuestion and the Questions collection were removed from QuizSet (see S3 in the
+    // review response): every real code path already managed questions through IQuestionStore/Question
+    // directly, so those members only ever existed in this test file. Question lifecycle is now covered by
+    // QuestionsHandlerTests and QuestionTests instead.
+
     [Fact]
     public void UpdateDetails_WithValidValues_UpdatesTitleAndDescription()
     {
@@ -188,15 +132,4 @@ public sealed class QuizSetTests
  
     private static QuizSetCreationParams ValidArgs() =>
         new(Guid.CreateVersion7(), "Quiz", "A quiz set");
- 
-    private static QuestionCreationParams ValidQuestionArgs() =>
-        new(
-            "What is 2+2?",
-            QuestionType.SingleChoice,
-            30,
-            100,
-            [
-                new AnswerOptionParams("3", false, 0),
-                new AnswerOptionParams("4", true, 1)
-            ]);
 }

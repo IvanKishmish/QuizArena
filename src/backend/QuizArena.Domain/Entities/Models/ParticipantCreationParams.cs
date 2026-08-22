@@ -10,4 +10,5 @@ public sealed record ParticipantCreationParams(
     IReadOnlyList<PowerUpType> AvailablePowerUp,
     PowerUpType? ActiveDoubleOrNothing,
     bool IsFrozen,
-    DateTimeOffset? FrozenUntil);
+    DateTimeOffset? FrozenUntil,
+    IReadOnlyCollection<Guid> AnsweredQuestionIds);

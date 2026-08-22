@@ -203,7 +203,10 @@ public sealed class GameRoomTests
         //Assert
         result.IsError.Should().BeFalse();
         room.Status.Should().Be(GameRoomStatus.InProgress);
-        room.CurrentQuestionIndex.Should().Be(0);
+        // S11: Start() leaves CurrentQuestionIndex at -1 ("no question active yet") instead of 0 — advancing
+        // to question #0 is now solely NextQuestion()'s job, same as every other question. See
+        // NextQuestion_WhenInProgress_IncrementsQuestionIndex below.
+        room.CurrentQuestionIndex.Should().Be(-1);
         room.StartedAt.Should().NotBeNull();
     }
  
@@ -218,7 +221,14 @@ public sealed class GameRoomTests
         room.Start();
  
         //Assert
-        room.Participants[0].AvailablePowerUps.Should().BeEquivalentTo(Enum.GetValues<PowerUpType>());
+        // S8: the starting kit is now an explicit list on Participant, not "whatever's in the enum" — a
+        // future PowerUpType shouldn't get handed to every player for free just because it was added.
+        room.Participants[0].AvailablePowerUps.Should().BeEquivalentTo(
+        [
+            PowerUpType.Freeze,
+            PowerUpType.FiftyFifty,
+            PowerUpType.DoubleOrNothing
+        ]);
     }
  
     [Fact]
@@ -286,7 +296,9 @@ public sealed class GameRoomTests
  
         //Assert
         result.IsError.Should().BeFalse();
-        room.CurrentQuestionIndex.Should().Be(1);
+        // S11: first NextQuestion() call after Start() moves -1 -> 0 (revealing question #0) — it used to
+        // move 0 -> 1, so question #0 was never sent to anyone.
+        room.CurrentQuestionIndex.Should().Be(0);
         room.CurrentQuestionStartedAt.Should().NotBeNull();
     }
  
@@ -334,7 +346,8 @@ public sealed class GameRoomTests
         room.NextQuestion();
  
         //Assert
-        room.CurrentQuestionIndex.Should().Be(2);
+        // S11: starts at -1, so two calls land on 0 then 1 (question #0, then #1) — not 1 then 2.
+        room.CurrentQuestionIndex.Should().Be(1);
     }
  
     #endregion
@@ -391,6 +404,36 @@ public sealed class GameRoomTests
  
     #endregion
  
+    #region K3/K4 plumbing
+
+    [Fact]
+    public void AddParticipant_WhenRoomIsFull_ReturnsValidationError()
+    {
+        //Arrange
+        var room = CreateRoom();
+
+        for (var i = 0; i < GameRoom.MaxParticipants; i++)
+            room.AddParticipant(Guid.CreateVersion7(), null, $"Player {i}");
+
+        //Act
+        var result = room.AddParticipant(Guid.CreateVersion7(), null, "One Too Many");
+
+        //Assert
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be("GameRoom.RoomFull");
+        room.Participants.Should().HaveCount(GameRoom.MaxParticipants);
+    }
+
+    [Fact]
+    public void Create_NewRoom_HasVersionZero()
+    {
+        // Version 0 is what IGameRoomStore.SaveAsync treats as "this room must not already exist" — see
+        // GameRoomStore's compare-and-swap script.
+        CreateRoom().Version.Should().Be(0);
+    }
+
+    #endregion
+
     private static GameRoom CreateRoom() =>
         GameRoom.Create(ValidArgs()).Value;
  

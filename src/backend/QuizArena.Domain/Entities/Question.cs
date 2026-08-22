@@ -21,7 +21,7 @@ public sealed class Question : Entity
     private Question()
     { } // ef
 
-    private Question(Guid id, QuestionCreationParams args) : base(id)
+    internal Question(Guid id, QuestionCreationParams args) : base(id)
     {
         Text = args.Text;
         QuestionType = args.QuestionType;
@@ -62,8 +62,11 @@ public sealed class Question : Entity
                 selectedOptionIndices.ToHashSet().SetEquals(correctIndices),
 
             QuestionType.Ordering =>
-                selectedOptionIndices
-                    .SequenceEqual(Options.OrderBy(o => o.OrderIndex).Select((_, i) => i)),
+                selectedOptionIndices.SequenceEqual(
+                    Options
+                        .Select((o, originalIndex) => (o.OrderIndex, originalIndex))
+                        .OrderBy(x => x.OrderIndex)
+                        .Select(x => x.originalIndex)),
 
             _ => false
         };

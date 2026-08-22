@@ -404,6 +404,37 @@ public sealed class QuestionTests
         //Assert
         score.Should().Be(0);
     }
+
+    // K5 regression tests. CreateOrderingQuestion's options happen to have OrderIndex == list position
+    // (0, 1, 2 in that order) — exactly why the two tests above didn't catch the original bug: the buggy
+    // implementation always expected the answer "[0, 1, 2, ...]" regardless of OrderIndex, so on data shaped
+    // like this "buggy" and "correct" agree on every answer. These two use options stored out of OrderIndex
+    // sequence, which only a correct implementation can score right.
+    [Fact]
+    public void CalculateScore_Ordering_WhenOptionsAreStoredOutOfOrderIndexSequence_CorrectSequenceScoresPositive()
+    {
+        //Arrange
+        var question = CreateShuffledOrderingQuestion();
+
+        //Act — position 2 holds OrderIndex 0, position 0 holds OrderIndex 1, position 1 holds OrderIndex 2
+        var score = question.CalculateScore([2, 0, 1], 0);
+
+        //Assert
+        score.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void CalculateScore_Ordering_WhenOptionsAreStoredOutOfOrderIndexSequence_ListPositionSequenceScoresZero()
+    {
+        //Arrange
+        var question = CreateShuffledOrderingQuestion();
+
+        //Act — [0, 1, 2] is what the pre-fix bug always accepted, regardless of the real OrderIndex order
+        var score = question.CalculateScore([0, 1, 2], 0);
+
+        //Assert
+        score.Should().Be(0);
+    }
  
     #endregion
  
@@ -490,6 +521,18 @@ public sealed class QuestionTests
             ]
         }).Value;
  
+    private static Question CreateShuffledOrderingQuestion() =>
+        Question.Create(SingleChoiceArgs() with
+        {
+            QuestionType = QuestionType.Ordering,
+            Options =
+            [
+                new AnswerOptionParams("Second", false, 1),
+                new AnswerOptionParams("Third", false, 2),
+                new AnswerOptionParams("First", false, 0)
+            ]
+        }).Value;
+
     private static QuestionCreationParams SingleChoiceArgs() =>
         new(
             "What is the capital of France?",

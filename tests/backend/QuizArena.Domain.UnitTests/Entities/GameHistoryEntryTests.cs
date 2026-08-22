@@ -18,6 +18,7 @@ public sealed class GameHistoryEntryTests
  
         //Assert
         result.IsError.Should().BeFalse();
+        result.Value.GameId.Should().Be(args.GameId);
         result.Value.QuizSetId.Should().Be(args.QuizSetId);
         result.Value.ParticipantUserId.Should().Be(args.ParticipantUserId);
         result.Value.DisplayName.Should().Be(args.DisplayName);
@@ -39,6 +40,22 @@ public sealed class GameHistoryEntryTests
         result.Value.ParticipantUserId.Should().BeNull();
     }
  
+    [Fact]
+    public void Create_WithEmptyGameId_ReturnsValidationError()
+    {
+        // W7: GameId (GameRoom.Id, shared by every entry produced by one game) is what makes a real "how
+        // many distinct games were played" count possible — see GetDashboardStatsQueryHandler.
+        //Arrange
+        var args = ValidArgs() with { GameId = Guid.Empty };
+
+        //Act
+        var result = GameHistoryEntry.Create(args);
+
+        //Assert
+        result.IsError.Should().BeTrue();
+        result.Errors.Should().Contain(e => e.Code == "GameHistoryEntry.GameIdRequired");
+    }
+
     [Fact]
     public void Create_WithEmptyQuizSetId_ReturnsValidationError()
     {
@@ -117,16 +134,16 @@ public sealed class GameHistoryEntryTests
     public void Create_WithMultipleInvalidFields_ReturnsAllValidationErrors()
     {
         //Arrange
-        var args = new GameHistoryEntryCreationParams(Guid.Empty, null, "", -1, 0);
+        var args = new GameHistoryEntryCreationParams(Guid.Empty, Guid.Empty, null, "", -1, 0);
  
         //Act
         var result = GameHistoryEntry.Create(args);
  
         //Assert
         result.IsError.Should().BeTrue();
-        result.Errors.Should().HaveCount(4);
+        result.Errors.Should().HaveCount(5);
     }
  
     private static GameHistoryEntryCreationParams ValidArgs() =>
-        new(Guid.CreateVersion7(), Guid.CreateVersion7(), "Ivan", 100, 1);
+        new(Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7(), "Ivan", 100, 1);
 }

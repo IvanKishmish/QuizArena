@@ -43,8 +43,8 @@ public sealed class Player : Entity
 
     public ErrorOr<Updated> RecordGameResult(int score)
     {
-        if (score <= 0)
-            return Error.Validation("Player.NegativeOrEqualToZeroScore", "Score cannot be either negative or 0.");
+        if (score < 0)
+            return Error.Validation("Player.NegativeScore", "Score cannot be negative.");
 
         TotalGamesPlayed++;
         TotalScore += score;
