@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using QuizArena.Application.Common.Interfaces;
 using QuizArena.Domain.Entities;
 using QuizArena.Persistence.Identity;
+using QuizArena.Persistence.Outbox;
 
 namespace QuizArena.Persistence.Context;
 
@@ -10,6 +11,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<QuizSet> QuizSets => Set<QuizSet>();
     public DbSet<Player> Players => Set<Player>();
     public DbSet<GameHistoryEntry> GameHistory => Set<GameHistoryEntry>();
+
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

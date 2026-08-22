@@ -12,4 +12,4 @@ public sealed record GameHistorySummary(
     DateTimeOffset PlayedAt);
 
 public sealed record GetMyGameHistoryQuery(int PageNumber = 1, int PageSize = 20)
-    : IQuery<ErrorOr<PagedResponse<GameHistorySummary>>>;
+    : IQuery<ErrorOr<PagedResponse<GameHistorySummary>>>, IPagedQuery;

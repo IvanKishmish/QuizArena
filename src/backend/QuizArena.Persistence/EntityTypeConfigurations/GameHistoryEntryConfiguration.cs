@@ -15,6 +15,9 @@ public sealed class GameHistoryEntryConfiguration : IEntityTypeConfiguration<Gam
         builder.Property(x => x.Id)
             .ValueGeneratedNever();
 
+        builder.Property(x => x.GameId)
+            .IsRequired();
+
         builder.Property(x => x.QuizSetId)
             .IsRequired();
 
@@ -37,5 +40,6 @@ public sealed class GameHistoryEntryConfiguration : IEntityTypeConfiguration<Gam
 
         builder.HasIndex(x => x.QuizSetId);
         builder.HasIndex(x => x.ParticipantUserId);
+        builder.HasIndex(x => x.GameId);
     }
 }

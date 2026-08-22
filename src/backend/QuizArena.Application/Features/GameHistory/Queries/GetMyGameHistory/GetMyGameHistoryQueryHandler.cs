@@ -1,17 +1,26 @@
 using Mediator;
 using ErrorOr;
+using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using QuizArena.Application.Common;
 using QuizArena.Application.Common.Interfaces;
 
 namespace QuizArena.Application.Features.GameHistory.Queries.GetMyGameHistory;
 
-public sealed class GetMyGameHistoryQueryHandler(IAppDbContext context, ICurrentUserService currentUser)
+public sealed class GetMyGameHistoryQueryHandler(
+    IAppDbContext context, ICurrentUserService currentUser, IValidator<GetMyGameHistoryQuery> validator)
     : IQueryHandler<GetMyGameHistoryQuery, ErrorOr<PagedResponse<GameHistorySummary>>>
 {
     public async ValueTask<ErrorOr<PagedResponse<GameHistorySummary>>> Handle(
         GetMyGameHistoryQuery query, CancellationToken ct = default)
     {
+        var validationResult = await validator.ValidateAsync(query, ct);
+
+        if (!validationResult.IsValid)
+            return validationResult.Errors
+                .Select(e => Error.Validation(e.PropertyName, e.ErrorMessage))
+                .ToList();
+
         if (currentUser.UserId is null)
             return Error.Unauthorized("Auth.NotAuthenticated", "User is not authenticated.");
 
@@ -38,7 +47,7 @@ public sealed class GetMyGameHistoryQueryHandler(IAppDbContext context, ICurrent
         var items = entries
             .Select(e => new GameHistorySummary(
                 e.QuizSetId,
-                titlesByQuizSetId.GetValueOrDefault(e.QuizSetId, "Видалений квіз"),
+                titlesByQuizSetId.GetValueOrDefault(e.QuizSetId, "Deleted quiz"),
                 e.FinalScore,
                 e.Placement,
                 e.CreatedAt))
