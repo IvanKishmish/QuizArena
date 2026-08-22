@@ -26,9 +26,12 @@ public sealed class SaveGameHistoryCommandHandler(
 
         var playersById = players.ToDictionary(p => p.Id);
 
+        // Defensive: IIdentityService.GetEmailsAsync isn't contractually guaranteed to return non-null
+        // (and an unconfigured test double for it returns null too) — treat a null result the same as
+        // "no emails known" rather than letting it blow up the whole history-save with an NRE.
         var emailsByUserId = registeredUserIds.Count == 0
             ? new Dictionary<Guid, string>()
-            : await identityService.GetEmailsAsync(registeredUserIds, ct);
+            : await identityService.GetEmailsAsync(registeredUserIds, ct) ?? new Dictionary<Guid, string>();
 
         for (var i = 0; i < command.FinalLeaderboard.Count; i++)
         {
