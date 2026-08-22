@@ -1,4 +1,7 @@
 using FluentAssertions;
+using FluentValidation;
+using FluentValidation.Results;
+using Moq;
 using QuizArena.Application.Features.QuizSets.Queries.GetMyQuizSets;
 using QuizArena.Application.Features.QuizSets.Queries.GetPublicQuizSets;
 using QuizArena.Application.UnitTests.Common;
@@ -60,11 +63,19 @@ public class GetMyQuizSetsQueryHandlerTests : QuizArenaHandlerTestBase
 
 public class GetPublicQuizSetsQueryHandlerTests : QuizArenaHandlerTestBase
 {
-    private GetPublicQuizSetsQueryHandler CreateHandler() => new(DbContext);
+    private readonly Mock<IValidator<GetPublicQuizSetsQuery>> _validatorMock = new();
+
+    private GetPublicQuizSetsQueryHandler CreateHandler() => new(DbContext, _validatorMock.Object);
+
+    private void SetupValidatorSuccess()
+        => _validatorMock
+            .Setup(x => x.ValidateAsync(It.IsAny<GetPublicQuizSetsQuery>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ValidationResult());
 
     [Fact]
     public async Task Handle_ReturnsOnlyPublicQuizSets()
     {
+        SetupValidatorSuccess();
         // Arrange
         await SeedQuizSet(Guid.CreateVersion7(), Visibility.Public, "Public 1");
         await SeedQuizSet(Guid.CreateVersion7(), Visibility.Private, "Private 1");
@@ -84,6 +95,7 @@ public class GetPublicQuizSetsQueryHandlerTests : QuizArenaHandlerTestBase
     [Fact]
     public async Task Handle_OrdersResultsByCreatedAtDescending()
     {
+        SetupValidatorSuccess();
         // Arrange: save one at a time, with a small delay — so that CreatedAt
         // (set by the interceptor on SaveChanges) is guaranteed to differ.
         var first = await SeedQuizSet(Guid.CreateVersion7(), Visibility.Public, "First created");
@@ -101,6 +113,7 @@ public class GetPublicQuizSetsQueryHandlerTests : QuizArenaHandlerTestBase
     [Fact]
     public async Task Handle_RespectsPageSizeAndPageNumber()
     {
+        SetupValidatorSuccess();
         // Arrange: 5 public quiz sets
         for (var i = 1; i <= 5; i++)
         {
@@ -117,5 +130,21 @@ public class GetPublicQuizSetsQueryHandlerTests : QuizArenaHandlerTestBase
         result.Value.Items.Should().HaveCount(2);
         result.Value.TotalCount.Should().Be(5);
         result.Value.TotalPages.Should().Be(3); // ceil(5 / 2)
+    }
+
+    [Fact]
+    public async Task Handle_WhenValidationFails_ReturnsValidationErrorWithoutQueryingDatabase()
+    {
+        // W8: an oversized PageSize used to reach Skip/Take completely unchecked.
+        var failure = new ValidationFailure("PageSize", "PageSize must be between 1 and 100.");
+        _validatorMock
+            .Setup(x => x.ValidateAsync(It.IsAny<GetPublicQuizSetsQuery>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ValidationResult([failure]));
+        await SeedQuizSet(Guid.CreateVersion7(), Visibility.Public);
+        var handler = CreateHandler();
+
+        var result = await handler.Handle(new GetPublicQuizSetsQuery(PageNumber: 1, PageSize: 1_000_000));
+
+        result.IsError.Should().BeTrue();
     }
 }

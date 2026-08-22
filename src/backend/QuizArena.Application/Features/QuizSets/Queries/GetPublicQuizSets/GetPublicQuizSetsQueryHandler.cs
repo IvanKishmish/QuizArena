@@ -1,5 +1,6 @@
 using ErrorOr;
 using Mediator;
+using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using QuizArena.Application.Common;
 using QuizArena.Application.Common.Interfaces;
@@ -9,12 +10,19 @@ using QuizArena.Domain.Enums;
 namespace QuizArena.Application.Features.QuizSets.Queries.GetPublicQuizSets;
 
 public sealed class GetPublicQuizSetsQueryHandler
-(IAppDbContext dbContext)
+(IAppDbContext dbContext, IValidator<GetPublicQuizSetsQuery> validator)
 : IQueryHandler<GetPublicQuizSetsQuery, ErrorOr<PagedResponse<QuizSetSummary>>>
 {
     public async ValueTask<ErrorOr<PagedResponse<QuizSetSummary>>> Handle(GetPublicQuizSetsQuery request,
         CancellationToken ct = default)
     {
+        var validationResult = await validator.ValidateAsync(request, ct);
+
+        if (!validationResult.IsValid)
+            return validationResult.Errors
+                .Select(e => Error.Validation(e.PropertyName, e.ErrorMessage))
+                .ToList();
+
         var query = dbContext.QuizSets
             .AsNoTracking()
             .Where(qs => qs.Visibility == Visibility.Public);

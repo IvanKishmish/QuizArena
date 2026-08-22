@@ -1,5 +1,6 @@
 using Mediator;
 using ErrorOr;
+using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using QuizArena.Application.Common;
 using QuizArena.Application.Common.Interfaces;
@@ -9,12 +10,20 @@ namespace QuizArena.Application.Features.Admin.Queries.GetAllUsers;
 
 public sealed class GetAllUsersQueryHandler(
     IIdentityUserQueryService identityUserQueryService,
-    IAppDbContext context)
+    IAppDbContext context,
+    IValidator<GetAllUsersQuery> validator)
     : IQueryHandler<GetAllUsersQuery, ErrorOr<PagedResponse<UserSummary>>>
 {
     public async ValueTask<ErrorOr<PagedResponse<UserSummary>>> Handle(
         GetAllUsersQuery query, CancellationToken ct = default)
     {
+        var validationResult = await validator.ValidateAsync(query, ct);
+
+        if (!validationResult.IsValid)
+            return validationResult.Errors
+                .Select(e => Error.Validation(e.PropertyName, e.ErrorMessage))
+                .ToList();
+
         var (users, totalCount) = await identityUserQueryService.GetPagedUsersAsync(
             query.PageNumber, query.PageSize, ct);
 
