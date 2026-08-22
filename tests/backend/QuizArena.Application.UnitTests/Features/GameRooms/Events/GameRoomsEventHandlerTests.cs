@@ -70,6 +70,13 @@ public class SaveGameHistoryCommandHandlerTests : IDisposable
             .UseInMemoryDatabase(Guid.CreateVersion7().ToString())
             .Options;
         _dbContext = new AppDbContext(options);
+
+        // Forces the InMemory provider to fully materialize the model/internal tables up front instead of
+        // lazily per entity type on first use. Without this, a context that has already run one
+        // SaveChangesAsync() for one entity type (e.g. Player) can throw a NullReferenceException the first
+        // time it Add()s a different, not-yet-touched entity type (e.g. GameHistoryEntry) later in the same
+        // session — a known InMemory-provider quirk, not a bug in the handler.
+        _dbContext.Database.EnsureCreated();
     }
 
     public void Dispose() => _dbContext.Dispose();
@@ -139,7 +146,7 @@ public class SaveGameHistoryCommandHandlerTests : IDisposable
         // called it — TotalGamesPlayed/TotalScore stayed 0 for every real player, forever.
         // Arrange
         var userId = Guid.CreateVersion7();
-        var player = Player.Create(userId, "Ivan").Value;
+        var player = Player.Create(userId, "Ivan99").Value;
         _dbContext.Players.Add(player);
         await _dbContext.SaveChangesAsync();
 
@@ -162,7 +169,7 @@ public class SaveGameHistoryCommandHandlerTests : IDisposable
         // W6: 0 is a valid outcome (answered everything wrong / never in time) — only a negative score would
         // be invalid data. See PlayerTests for the domain-level version of this same fix.
         var userId = Guid.CreateVersion7();
-        _dbContext.Players.Add(Player.Create(userId, "Ivan").Value);
+        _dbContext.Players.Add(Player.Create(userId, "Ivan99").Value);
         await _dbContext.SaveChangesAsync();
 
         var leaderboard = new List<LeaderboardEntry> { new(Guid.CreateVersion7(), "Ivan", 0) };
