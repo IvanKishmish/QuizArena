@@ -4,6 +4,9 @@ public sealed class RefreshToken
 {
     public Guid Id { get; private set; } = Guid.CreateVersion7();
     public Guid UserId { get; private set; }
+
+    public Guid FamilyId { get; private set; }
+
     public string TokenHash { get; private set; } = string.Empty;
     
     public DateTimeOffset ExpiresAt { get; private set; }
@@ -15,10 +18,11 @@ public sealed class RefreshToken
     private RefreshToken()
     {} // ef
 
-    public static RefreshToken Create(Guid userId, string tokenHash, TimeSpan lifetime)
+    public static RefreshToken Create(Guid userId, Guid familyId, string tokenHash, TimeSpan lifetime)
         => new RefreshToken
         {
             UserId = userId,
+            FamilyId = familyId,
             TokenHash = tokenHash,
             ExpiresAt = DateTimeOffset.UtcNow.Add(lifetime)
         };

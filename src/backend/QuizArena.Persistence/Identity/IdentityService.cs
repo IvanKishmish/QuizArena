@@ -58,25 +58,32 @@ public sealed class IdentityService(
         return user.Id;
     }
 
-    public async Task StoreRefreshTokenAsync(Guid userId, string refreshTokenHash, TimeSpan lifetime, CancellationToken ct = default)
+    public async Task StoreRefreshTokenAsync(
+        Guid userId, Guid familyId, string refreshTokenHash, TimeSpan lifetime, CancellationToken ct = default)
     {
-        var refreshToken = RefreshToken.Create(userId, refreshTokenHash, lifetime);
+        var refreshToken = RefreshToken.Create(userId, familyId, refreshTokenHash, lifetime);
         
         identityDbContext.RefreshTokens.Add(refreshToken);
         
         await identityDbContext.SaveChangesAsync(ct);
     }
 
-    public async Task<Guid?> ValidateRefreshTokenAsync(string refreshTokenHash, CancellationToken ct = default)
+    public async Task<RefreshTokenLookup?> FindRefreshTokenAsync(string refreshTokenHash, CancellationToken ct = default)
     {
         var token = await identityDbContext
             .RefreshTokens
             .FirstOrDefaultAsync(t => t.TokenHash == refreshTokenHash, ct);
 
-        if (token is null || !token.IsActive)
+        if (token is null)
             return null;
 
-        return token.UserId;
+        var status = token.RevokedAt is not null
+            ? RefreshTokenStatus.Revoked
+            : token.ExpiresAt <= DateTimeOffset.UtcNow
+                ? RefreshTokenStatus.Expired
+                : RefreshTokenStatus.Active;
+
+        return new RefreshTokenLookup(token.UserId, token.FamilyId, status);
     }
 
     public async Task RevokeRefreshTokenAsync(string refreshTokenHash, CancellationToken ct = default)
@@ -91,6 +98,36 @@ public sealed class IdentityService(
         token.Revoke();
         
         await identityDbContext.SaveChangesAsync(ct);
+    }
+
+    public async Task RevokeRefreshTokenFamilyAsync(Guid familyId, CancellationToken ct = default)
+    {
+        var tokens = await identityDbContext.RefreshTokens
+            .Where(t => t.FamilyId == familyId && t.RevokedAt == null)
+            .ToListAsync(ct);
+
+        foreach (var token in tokens)
+            token.Revoke();
+
+        await identityDbContext.SaveChangesAsync(ct);
+    }
+
+    public async Task RevokeAllRefreshTokensForUserAsync(Guid userId, CancellationToken ct = default)
+    {
+        var tokens = await identityDbContext.RefreshTokens
+            .Where(t => t.UserId == userId && t.RevokedAt == null)
+            .ToListAsync(ct);
+
+        foreach (var token in tokens)
+            token.Revoke();
+
+        await identityDbContext.SaveChangesAsync(ct);
+    }
+
+    public async Task<bool> IsUserLockedOutAsync(Guid userId, CancellationToken ct = default)
+    {
+        var user = await userManager.FindByIdAsync(userId.ToString());
+        return user is not null && await userManager.IsLockedOutAsync(user);
     }
 
     public async Task<IReadOnlyDictionary<Guid, string>> GetEmailsAsync(IReadOnlyCollection<Guid> userIds,
@@ -125,6 +162,8 @@ public sealed class IdentityService(
         
         await userManager.SetLockoutEnabledAsync(user, true);
         await userManager.SetLockoutEndDateAsync(user, DateTimeOffset.MaxValue);
+
+        await RevokeAllRefreshTokensForUserAsync(userId, ct);
 
         return Result.Updated;
     }

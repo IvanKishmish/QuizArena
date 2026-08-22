@@ -1,8 +1,10 @@
 using System.Text;
 using DotNetEnv;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
 using QuizArena.Application;
+using QuizArena.Application.Common.Options;
 using QuizArena.Persistence;
 using QuizArena.WebApi;
 using QuizArena.WebApi.Extensions;
@@ -26,7 +28,9 @@ try
 
     builder.Services.AddApplication();
     builder.Services.AddPersistence(builder.Configuration);
-    builder.Services.AddPresentation();
+    builder.Services.AddPersistenceIdentity()
+        .AddDefaultTokenProviders();
+    builder.Services.AddPresentation(builder.Configuration);
 
     builder.Services.AddResponseCompression(options =>
     {
@@ -36,30 +40,36 @@ try
     builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
     builder.Services.AddProblemDetails();
 
-    builder.Services.AddControllers();
+    builder.Services.AddControllers(options =>
+    {
+        options.OutputFormatters.RemoveType<Microsoft.AspNetCore.Mvc.Formatters.StringOutputFormatter>();
+    });
     builder.Services.AddOpenApi();
+
+    var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
 
     builder.Services.AddAuthentication(options =>
         {
+            options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
             options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
             options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+            options.DefaultForbidScheme = JwtBearerDefaults.AuthenticationScheme;
+            options.DefaultSignInScheme = JwtBearerDefaults.AuthenticationScheme;
         })
         .AddJwtBearer(options =>
         {
             options.MapInboundClaims = false;
-        
-            var jwtSecret = builder.Configuration["Jwt:Secret"]!;
 
             options.TokenValidationParameters = new TokenValidationParameters
             {
                 ValidateIssuer = true,
-                ValidIssuer = builder.Configuration["Jwt:Issuer"],
+                ValidIssuer = jwtOptions.Issuer,
 
                 ValidateAudience = true,
-                ValidAudience = builder.Configuration["Jwt:Audience"],
+                ValidAudience = jwtOptions.Audience,
 
                 ValidateIssuerSigningKey = true,
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.Secret)),
 
                 ValidateLifetime = true,
                 ClockSkew = TimeSpan.Zero
@@ -81,10 +91,13 @@ try
         });
 
     var corsOriginString = builder.Configuration["CORS_ALLOWED_ORIGINS"];
-    
-    var allowedOrigins = !string.IsNullOrEmpty(corsOriginString)
-        ? corsOriginString.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-        : [];
+
+    if (string.IsNullOrWhiteSpace(corsOriginString))
+        throw new InvalidOperationException(
+            "CORS_ALLOWED_ORIGINS is not configured. Set it to a comma-separated list of allowed origins.");
+
+    var allowedOrigins = corsOriginString
+        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     builder.Services.AddCors(options =>
     {
@@ -101,7 +114,9 @@ try
 
     var app = builder.Build();
 
-    await app.ApplyMigrationsAsync();
+    if (app.Environment.IsDevelopment())
+        await app.ApplyMigrationsAsync();
+
     await app.SeedAdminAsync();
     
     app.UseExceptionHandler();
@@ -120,6 +135,8 @@ try
     app.UseAuthentication();
     app.UseAuthorization();
 
+    app.UseRateLimiter();
+
     app.MapControllers();
 
     app.MapHub<GameHub>("/hubs/game");
@@ -137,3 +154,4 @@ finally
     Log.CloseAndFlush();
 }
 
+public partial class Program;

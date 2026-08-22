@@ -1,6 +1,9 @@
 using Mediator;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Options;
+using QuizArena.Application.Common.Options;
 using QuizArena.Application.Features.Auth.Login;
 using QuizArena.Application.Features.Auth.Logout;
 using QuizArena.Application.Features.Auth.RefreshToken;
@@ -8,7 +11,8 @@ using QuizArena.Application.Features.Auth.Register;
 
 namespace QuizArena.WebApi.Controllers;
 
-public sealed class AuthController(IMediator mediator) : ApiController(mediator)
+[EnableRateLimiting("auth")]
+public sealed class AuthController(IMediator mediator, IOptions<JwtOptions> jwtOptions) : ApiController(mediator)
 {
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterCommand command, CancellationToken ct = default)
@@ -53,7 +57,10 @@ public sealed class AuthController(IMediator mediator) : ApiController(mediator)
         var result = await Mediator.Send(new RefreshTokenCommand(refreshToken), ct);
         
         if (result.IsError)
+        {
+            Response.Cookies.Delete("refresh_token");
             return HandleResult(result);
+        }
         
         SetRefreshTokenCookie(result.Value.RefreshToken);
 
@@ -69,8 +76,8 @@ public sealed class AuthController(IMediator mediator) : ApiController(mediator)
         {
             HttpOnly = true,
             Secure = true,
-            SameSite = SameSiteMode.Strict,
-            Expires = DateTimeOffset.UtcNow.AddDays(7)
+            SameSite = SameSiteMode.None,
+            Expires = DateTimeOffset.UtcNow.AddDays(jwtOptions.Value.RefreshTokenExpiryDays)
         });
     }
 

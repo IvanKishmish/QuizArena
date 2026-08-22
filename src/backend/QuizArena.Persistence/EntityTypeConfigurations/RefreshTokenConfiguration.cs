@@ -18,6 +18,10 @@ public sealed class RefreshTokenConfiguration : IEntityTypeConfiguration<Refresh
         builder.Property(x => x.UserId)
             .IsRequired();
 
+        // S6: identifies the chain of tokens a single login produced through rotation — see RefreshToken.cs.
+        builder.Property(x => x.FamilyId)
+            .IsRequired();
+
         builder.Property(x => x.TokenHash)
             .IsRequired()
             .HasMaxLength(200);
@@ -32,5 +36,8 @@ public sealed class RefreshTokenConfiguration : IEntityTypeConfiguration<Refresh
             .IsUnique();
 
         builder.HasIndex(x => x.UserId);
+
+        // S6: RefreshTokenCommandHandler revokes an entire family at once on reuse detection.
+        builder.HasIndex(x => x.FamilyId);
     }
 }

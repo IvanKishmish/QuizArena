@@ -19,7 +19,9 @@ public sealed class CurrentUserService(IHttpContextAccessor httpContextAccessor)
 
     public string? Email => httpContextAccessor.HttpContext?.User
         .FindFirst(JwtRegisteredClaimNames.Email)?.Value;
-    
-    public string? Role => httpContextAccessor.HttpContext?.User
-        .FindFirst(ClaimTypes.Role)?.Value;
+
+    public IReadOnlyList<string> Roles => httpContextAccessor.HttpContext?.User
+        .FindAll(ClaimTypes.Role)
+        .Select(c => c.Value)
+        .ToList() ?? [];
 }

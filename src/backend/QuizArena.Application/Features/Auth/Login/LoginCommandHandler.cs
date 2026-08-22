@@ -1,8 +1,10 @@
 using FluentValidation;
+using Microsoft.Extensions.Options;
 using QuizArena.Application.Common.Interfaces;
 using Mediator;
 using ErrorOr;
 using QuizArena.Application.Common;
+using QuizArena.Application.Common.Options;
 using QuizArena.Application.Features.Auth.Common;
 
 namespace QuizArena.Application.Features.Auth.Login;
@@ -10,11 +12,10 @@ namespace QuizArena.Application.Features.Auth.Login;
 public sealed class LoginCommandHandler(
     IIdentityService identityService,
     ITokenService tokenService,
+    IOptions<JwtOptions> jwtOptions,
     IValidator<LoginCommand> validator)
 : ICommandHandler<LoginCommand, ErrorOr<TokenPair>>
 {
-    private static readonly TimeSpan RefreshTokenLifetime = TimeSpan.FromDays(7);
-    
     public async ValueTask<ErrorOr<TokenPair>> Handle(LoginCommand command, CancellationToken ct = default)
     {
         var validationResult = await validator.ValidateAsync(command, ct);
@@ -31,12 +32,15 @@ public sealed class LoginCommandHandler(
 
         var roles = await identityService.GetUserRolesAsync(userIdResult.Value, ct);
         
-        var accessToken = tokenService.GenerateAccessToken(userIdResult.Value, roles);
+        var accessToken = tokenService.GenerateAccessToken(userIdResult.Value, command.Email, roles);
         var refreshToken = tokenService.GenerateRefreshToken();
         var refreshTokenHash = TokenHasher.Hash(refreshToken);
 
+        var familyId = Guid.CreateVersion7();
+        var refreshLifetime = TimeSpan.FromDays(jwtOptions.Value.RefreshTokenExpiryDays);
+
         await identityService
-            .StoreRefreshTokenAsync(userIdResult.Value, refreshTokenHash, RefreshTokenLifetime, ct);
+            .StoreRefreshTokenAsync(userIdResult.Value, familyId, refreshTokenHash, refreshLifetime, ct);
         
         return new TokenPair(accessToken, refreshToken); 
     }
