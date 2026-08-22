@@ -6,9 +6,6 @@ using QuizArena.Domain.Enums;
 
 namespace QuizArena.Application.Benchmarking.H1;
 
-// ВАЖЛИВО: тіло цього методу дослівно повторює SubmitAnswerCommandHandler.Handle()
-// з Features/GameRooms/Commands/SubmitAnswer. Єдина змінна, яку H1 тестує — це
-// механізм диспетчеризації (Mediator / MediatR / Immediate.Handlers), не бізнес-логіка.
 public static class SubmitAnswerCore
 {
     public static async ValueTask<ErrorOr<int>> ExecuteAsync(
@@ -60,10 +57,10 @@ public static class SubmitAnswerCore
 
         var score = question.CalculateScore(input.SelectedOptionIndices, elapsedSeconds);
 
-        var addScoreResult = participant.AddScore(score);
+        var submitAnswerResult = participant.SubmitAnswer(input.QuestionId, score);
 
-        if (addScoreResult.IsError)
-            return addScoreResult.Errors;
+        if (submitAnswerResult.IsError)
+            return submitAnswerResult.Errors;
 
         await gameRoomStore.SaveAsync(gameRoom, ct);
 

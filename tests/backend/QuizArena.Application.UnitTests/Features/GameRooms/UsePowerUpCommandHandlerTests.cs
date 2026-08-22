@@ -30,6 +30,16 @@ public class UsePowerUpCommandHandlerTests
             .Setup(x => x.ValidateAsync(It.IsAny<UsePowerUpCommand>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ValidationResult());
 
+    // K4: every mutation now goes through OptimisticConcurrency, which calls SaveAsync — an unconfigured
+    // mock defaults to `false` (conflict) and the handler retries, re-applying UsePowerUp to the *same*
+    // mocked GameRoom object on each attempt. For most of these tests that just means wasted retries before
+    // an eventual (wrong) Conflict error, but for a power-up specifically, a second in-memory application
+    // would hit "already used" — so this isn't optional for the success-path tests below.
+    private void SetupSaveSucceeds()
+        => _gameRoomStoreMock
+            .Setup(x => x.SaveAsync(It.IsAny<GameRoom>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
     // Room with two participants, both granted their default power-ups via Start().
     private static (GameRoom Room, Participant Caster, Participant Target) CreateInProgressRoomWithTwoParticipants()
     {
@@ -137,6 +147,7 @@ public class UsePowerUpCommandHandlerTests
         // Arrange
         var (room, caster, target) = CreateInProgressRoomWithTwoParticipants();
         SetupValidatorSuccess();
+        SetupSaveSucceeds();
         _gameRoomStoreMock.Setup(x => x.GetByRoomCodeAsync("ABC123", It.IsAny<CancellationToken>())).ReturnsAsync(room);
         var handler = CreateHandler();
 
@@ -158,6 +169,7 @@ public class UsePowerUpCommandHandlerTests
     {
         var (room, caster, _) = CreateInProgressRoomWithTwoParticipants();
         SetupValidatorSuccess();
+        SetupSaveSucceeds();
         _gameRoomStoreMock.Setup(x => x.GetByRoomCodeAsync("ABC123", It.IsAny<CancellationToken>())).ReturnsAsync(room);
         var handler = CreateHandler();
 
@@ -182,6 +194,7 @@ public class UsePowerUpCommandHandlerTests
                 new AnswerOptionParams("22", false, 3)
             ])).Value;
         SetupValidatorSuccess();
+        SetupSaveSucceeds();
         _gameRoomStoreMock.Setup(x => x.GetByRoomCodeAsync("ABC123", It.IsAny<CancellationToken>())).ReturnsAsync(room);
         _questionStoreMock
             .Setup(x => x.GetByQuizSetIdAsync(room.QuizSetId, It.IsAny<CancellationToken>()))
@@ -219,6 +232,7 @@ public class UsePowerUpCommandHandlerTests
                 new AnswerOptionParams("5", false, 2)
             ])).Value;
         SetupValidatorSuccess();
+        SetupSaveSucceeds();
         _gameRoomStoreMock.Setup(x => x.GetByRoomCodeAsync("ABC123", It.IsAny<CancellationToken>())).ReturnsAsync(room);
         _questionStoreMock
             .Setup(x => x.GetByQuizSetIdAsync(room.QuizSetId, It.IsAny<CancellationToken>()))

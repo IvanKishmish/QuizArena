@@ -9,7 +9,8 @@ public sealed class CleanupGameRoomHandler(IGameRoomStore gameRoomStore, ILeader
 {
     public async ValueTask Handle(GameFinishedNotification notification, CancellationToken ct)
     {
-        await gameRoomStore.DeleteAsync(notification.RoomCode, ct);
-        await leaderboardStore.DeleteAsync(notification.RoomCode, ct);
+        var deleteRoom = gameRoomStore.DeleteAsync(notification.RoomCode, ct);
+        var deleteLeaderboard = leaderboardStore.DeleteAsync(notification.RoomCode, ct);
+        await Task.WhenAll(deleteRoom, deleteLeaderboard);
     }
 }

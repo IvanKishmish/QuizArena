@@ -184,6 +184,28 @@ public class SubmitAnswerCommandValidatorTests
     }
 
     [Fact]
+    public void Validate_WithMoreThanFiftySelectedOptionIndices_HasValidationErrorForSelectedOptionIndices()
+    {
+        // S13: previously unbounded — nothing stopped an oversized payload here.
+        var command = CreateValidCommand() with { SelectedOptionIndices = Enumerable.Range(0, 51).ToList() };
+
+        var result = _validator.TestValidate(command);
+
+        result.ShouldHaveValidationErrorFor(x => x.SelectedOptionIndices);
+    }
+
+    [Fact]
+    public void Validate_WithFiftySelectedOptionIndices_HasNoValidationError()
+    {
+        // Boundary check: 50 is allowed, 51 (above) is not.
+        var command = CreateValidCommand() with { SelectedOptionIndices = Enumerable.Range(0, 50).ToList() };
+
+        var result = _validator.TestValidate(command);
+
+        result.ShouldNotHaveValidationErrorFor(x => x.SelectedOptionIndices);
+    }
+
+    [Fact]
     public void Validate_WithValidCommand_HasNoValidationErrors()
     {
         var result = _validator.TestValidate(CreateValidCommand());

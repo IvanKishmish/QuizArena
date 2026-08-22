@@ -1,3 +1,4 @@
+using ErrorOr;
 using FluentAssertions;
 using FluentValidation;
 using FluentValidation.Results;
@@ -5,6 +6,7 @@ using Mediator;
 using Moq;
 using QuizArena.Application.Common.Interfaces;
 using QuizArena.Application.Common.Interfaces.Leaderboard;
+using QuizArena.Application.Features.GameHistory.Commands.SaveGameHistory;
 using QuizArena.Application.Features.GameRooms.Commands.EndGame;
 using QuizArena.Application.Features.GameRooms.Commands.NextQuestion;
 using QuizArena.Application.Features.GameRooms.Commands.StartGame;
@@ -28,6 +30,13 @@ public class StartGameCommandHandlerTests
         => _validatorMock
             .Setup(x => x.ValidateAsync(It.IsAny<StartGameCommand>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ValidationResult());
+
+    // K4: every mutation now goes through OptimisticConcurrency, which calls SaveAsync — an unconfigured
+    // mock defaults to `false` (conflict), so any test whose happy path should actually succeed needs this.
+    private void SetupSaveSucceeds()
+        => _gameRoomStoreMock
+            .Setup(x => x.SaveAsync(It.IsAny<GameRoom>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
 
     private static GameRoom CreateWaitingRoom(Guid hostId)
         => GameRoom.Create(new GameRoomCreationParams("ABC123", Guid.CreateVersion7(), hostId)).Value;
@@ -59,6 +68,7 @@ public class StartGameCommandHandlerTests
 
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be("GameRoom.NotHost");
+        _gameRoomStoreMock.Verify(x => x.SaveAsync(It.IsAny<GameRoom>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -86,6 +96,7 @@ public class StartGameCommandHandlerTests
         var room = CreateWaitingRoom(hostId);
         room.AddParticipant(Guid.CreateVersion7(), null, "Player1");
         SetupValidatorSuccess();
+        SetupSaveSucceeds();
         _currentUserMock.Setup(x => x.UserId).Returns(hostId);
         _gameRoomStoreMock.Setup(x => x.GetByRoomCodeAsync("ABC123", It.IsAny<CancellationToken>())).ReturnsAsync(room);
         var handler = CreateHandler();
@@ -94,6 +105,8 @@ public class StartGameCommandHandlerTests
 
         result.IsError.Should().BeFalse();
         room.Status.Should().Be(GameRoomStatus.InProgress);
+        // S11: Start() no longer puts the room "on" question 0 — see NextQuestionCommandHandlerTests for why.
+        room.CurrentQuestionIndex.Should().Be(-1);
         _gameRoomStoreMock.Verify(x => x.SaveAsync(room, It.IsAny<CancellationToken>()), Times.Once);
     }
 }
@@ -113,6 +126,11 @@ public class NextQuestionCommandHandlerTests
             .Setup(x => x.ValidateAsync(It.IsAny<NextQuestionCommand>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ValidationResult());
 
+    private void SetupSaveSucceeds()
+        => _gameRoomStoreMock
+            .Setup(x => x.SaveAsync(It.IsAny<GameRoom>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
     private static GameRoom CreateInProgressRoom()
     {
         var room = GameRoom.Create(new GameRoomCreationParams("ABC123", Guid.CreateVersion7(), Guid.CreateVersion7())).Value;
@@ -129,10 +147,18 @@ public class NextQuestionCommandHandlerTests
     [Fact]
     public async Task Handle_WhenGameIsNotInProgress_ReturnsValidationErrorFromDomain()
     {
-        // Arrange: room still Waiting — GameRoom.NextQuestion() itself rejects this
+        // Arrange: room still Waiting — GameRoom.NextQuestion() itself rejects this. Even though this
+        // handler now checks for a next *question* before mutating the room (see the test below), it still
+        // has to call GameRoom.NextQuestion() to surface this particular invariant, since "is the game even
+        // running" is something only the room itself knows.
         var room = GameRoom.Create(new GameRoomCreationParams("ABC123", Guid.CreateVersion7(), Guid.CreateVersion7())).Value;
         SetupValidatorSuccess();
         _gameRoomStoreMock.Setup(x => x.GetByRoomCodeAsync("ABC123", It.IsAny<CancellationToken>())).ReturnsAsync(room);
+        // Waiting room has no questions to advance to either way, but the point of this test is the
+        // "NotInProgress" domain check, not "NotFound" — give it a question so that isn't what trips first.
+        _questionStoreMock
+            .Setup(x => x.GetByQuizSetIdAsync(room.QuizSetId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([CreateQuestion()]);
         var handler = CreateHandler();
 
         var result = await handler.Handle(new NextQuestionCommand("ABC123"));
@@ -142,16 +168,20 @@ public class NextQuestionCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_WhenNoMoreQuestionsRemain_ReturnsNotFoundError_EvenThoughRoomStateWasAlreadyAdvanced()
+    public async Task Handle_WhenNoMoreQuestionsRemain_ReturnsNotFoundError_WithoutTouchingRoomState()
     {
-        // Arrange: this documents a real handler quirk worth knowing — the room is saved
-        // with the advanced CurrentQuestionIndex BEFORE the "no more questions" check runs.
+        // S11/K4: the "is there a next question" check now happens *before* GameRoom.NextQuestion() is
+        // called — the old handler incremented+saved CurrentQuestionIndex first and only found out
+        // afterwards that there was nothing to advance to, leaving the room parked past the end of the quiz
+        // for no reason. Now a "no more questions" call leaves the room's state (and Redis) untouched.
         var room = CreateInProgressRoom();
+        var originalIndex = room.CurrentQuestionIndex;
         SetupValidatorSuccess();
         _gameRoomStoreMock.Setup(x => x.GetByRoomCodeAsync("ABC123", It.IsAny<CancellationToken>())).ReturnsAsync(room);
         _questionStoreMock
             .Setup(x => x.GetByQuizSetIdAsync(room.QuizSetId, It.IsAny<CancellationToken>()))
             .ReturnsAsync([]); // no questions in the store at all
+
         var handler = CreateHandler();
 
         // Act
@@ -160,8 +190,8 @@ public class NextQuestionCommandHandlerTests
         // Assert
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be("Question.NotFound");
-        room.CurrentQuestionIndex.Should().Be(1); // state was already advanced and saved
-        _gameRoomStoreMock.Verify(x => x.SaveAsync(room, It.IsAny<CancellationToken>()), Times.Once);
+        room.CurrentQuestionIndex.Should().Be(originalIndex); // untouched
+        _gameRoomStoreMock.Verify(x => x.SaveAsync(It.IsAny<GameRoom>(), It.IsAny<CancellationToken>()), Times.Never);
         _gameNotifierMock.Verify(
             x => x.QuestionStartedAsync(It.IsAny<string>(), It.IsAny<object>(), It.IsAny<CancellationToken>()), Times.Never);
     }
@@ -170,21 +200,24 @@ public class NextQuestionCommandHandlerTests
     public async Task Handle_WithNextQuestionAvailable_AdvancesAndNotifiesParticipants()
     {
         // Arrange
-        var room = CreateInProgressRoom(); // CurrentQuestionIndex starts at 0
+        var room = CreateInProgressRoom(); // S11: CurrentQuestionIndex starts at -1 after Start()
         var firstQuestion = CreateQuestion("First");
         var secondQuestion = CreateQuestion("Second");
         SetupValidatorSuccess();
+        SetupSaveSucceeds();
         _gameRoomStoreMock.Setup(x => x.GetByRoomCodeAsync("ABC123", It.IsAny<CancellationToken>())).ReturnsAsync(room);
         _questionStoreMock
             .Setup(x => x.GetByQuizSetIdAsync(room.QuizSetId, It.IsAny<CancellationToken>()))
             .ReturnsAsync([firstQuestion, secondQuestion]);
         var handler = CreateHandler();
 
-        // Act: NextQuestion() bumps CurrentQuestionIndex from 0 to 1 => "Second" is served
+        // Act: NextQuestion() bumps CurrentQuestionIndex from -1 to 0 => "First" is served — this is
+        // precisely the S11 fix: question #0 now actually gets sent to someone.
         var result = await handler.Handle(new NextQuestionCommand("ABC123"));
 
         // Assert
         result.IsError.Should().BeFalse();
+        room.CurrentQuestionIndex.Should().Be(0);
         room.CurrentQuestionStartedAt.Should().NotBeNull();
         _gameNotifierMock.Verify(
             x => x.QuestionStartedAsync("ABC123", It.IsAny<object>(), It.IsAny<CancellationToken>()), Times.Once);
@@ -211,6 +244,19 @@ public class EndGameCommandHandlerTests
             .Setup(x => x.ValidateAsync(It.IsAny<EndGameCommand>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ValidationResult());
 
+    private void SetupSaveSucceeds()
+        => _gameRoomStoreMock
+            .Setup(x => x.SaveAsync(It.IsAny<GameRoom>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+    // W3: EndGame now saves Finish() through OptimisticConcurrency, and only afterwards sends
+    // SaveGameHistoryCommand — a happy-path test has to make that command succeed too, or the handler
+    // correctly (per W3's own fix) stops and never gets to publishing GameFinishedNotification.
+    private void SetupSaveGameHistorySucceeds()
+        => _mediatorMock
+            .Setup(x => x.Send(It.IsAny<SaveGameHistoryCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success);
+
     [Fact]
     public async Task Handle_WhenUserIsNotHost_ReturnsForbiddenError()
     {
@@ -225,6 +271,7 @@ public class EndGameCommandHandlerTests
 
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be("GameRoom.NotHost");
+        _gameRoomStoreMock.Verify(x => x.SaveAsync(It.IsAny<GameRoom>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -242,17 +289,21 @@ public class EndGameCommandHandlerTests
 
         result.IsError.Should().BeTrue();
         result.FirstError.Code.Should().Be("GameRoom.NotInProgress");
+        _gameRoomStoreMock.Verify(x => x.SaveAsync(It.IsAny<GameRoom>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
-    public async Task Handle_WithValidHostAndInProgressRoom_FinishesGameAndPublishesGameFinishedNotification()
+    public async Task Handle_WithValidHostAndInProgressRoom_SavesFinishedRoomBeforePublishingNotification()
     {
+        // W3: this is the actual fix under test — Finish() being *persisted*, not just called in memory.
         // Arrange
         var hostId = Guid.CreateVersion7();
         var room = GameRoom.Create(new GameRoomCreationParams("ABC123", Guid.CreateVersion7(), hostId)).Value;
         room.AddParticipant(Guid.CreateVersion7(), null, "Player1");
         room.Start();
         SetupValidatorSuccess();
+        SetupSaveSucceeds();
+        SetupSaveGameHistorySucceeds();
         _currentUserMock.Setup(x => x.UserId).Returns(hostId);
         _gameRoomStoreMock.Setup(x => x.GetByRoomCodeAsync("ABC123", It.IsAny<CancellationToken>())).ReturnsAsync(room);
         var finalLeaderboard = new List<LeaderboardEntry> { new(room.Participants[0].Id, "Player1", 100) };
@@ -267,6 +318,14 @@ public class EndGameCommandHandlerTests
         // Assert
         result.IsError.Should().BeFalse();
         room.Status.Should().Be(GameRoomStatus.Finished);
+        // W3: the whole point — Finish() is now saved, not just mutated in memory and left to CleanupGameRoomHandler
+        // (running at some unspecified point relative to everything else) to be the only reason it stuck.
+        _gameRoomStoreMock.Verify(x => x.SaveAsync(room, It.IsAny<CancellationToken>()), Times.Once);
+        _mediatorMock.Verify(
+            x => x.Send(
+                It.Is<SaveGameHistoryCommand>(c => c.GameId == room.Id && c.QuizSetId == room.QuizSetId),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
         _mediatorMock.Verify(
             x => x.Publish(
                 It.Is<GameFinishedNotification>(n =>
@@ -275,5 +334,38 @@ public class EndGameCommandHandlerTests
                     n.FinalLeaderboard == finalLeaderboard),
                 It.IsAny<CancellationToken>()),
             Times.Once);
+    }
+
+    [Fact]
+    public async Task Handle_WhenSaveGameHistoryFails_ReturnsErrorAndDoesNotPublishNotification()
+    {
+        // W3/W6: SaveGameHistoryCommand is sent as a direct command specifically so its failure can stop
+        // EndGame from telling anyone the game finished successfully — unlike the old design where email/
+        // history/cleanup were independent notification handlers with no relationship to each other's outcome.
+        var hostId = Guid.CreateVersion7();
+        var room = GameRoom.Create(new GameRoomCreationParams("ABC123", Guid.CreateVersion7(), hostId)).Value;
+        room.AddParticipant(Guid.CreateVersion7(), null, "Player1");
+        room.Start();
+        SetupValidatorSuccess();
+        SetupSaveSucceeds();
+        _mediatorMock
+            .Setup(x => x.Send(It.IsAny<SaveGameHistoryCommand>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ErrorOr<Success>.From(
+                [Error.Failure("GameHistory.SaveFailed", "Could not save game history.")]));
+        _currentUserMock.Setup(x => x.UserId).Returns(hostId);
+        _gameRoomStoreMock.Setup(x => x.GetByRoomCodeAsync("ABC123", It.IsAny<CancellationToken>())).ReturnsAsync(room);
+        _leaderboardStoreMock
+            .Setup(x => x.GetTopAsync("ABC123", room.Participants.Count, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new LeaderboardEntry(room.Participants[0].Id, "Player1", 100)]);
+        var handler = CreateHandler();
+
+        // Act
+        var result = await handler.Handle(new EndGameCommand("ABC123"));
+
+        // Assert
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be("GameHistory.SaveFailed");
+        _mediatorMock.Verify(
+            x => x.Publish(It.IsAny<GameFinishedNotification>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 }

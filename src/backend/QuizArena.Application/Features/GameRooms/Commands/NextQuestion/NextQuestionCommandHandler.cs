@@ -1,7 +1,9 @@
 using ErrorOr;
 using FluentValidation;
 using Mediator;
+using QuizArena.Application.Common;
 using QuizArena.Application.Common.Interfaces;
+using QuizArena.Domain.Entities;
 
 namespace QuizArena.Application.Features.GameRooms.Commands.NextQuestion;
 
@@ -12,6 +14,8 @@ public sealed class NextQuestionCommandHandler(
     IValidator<NextQuestionCommand> validator)
 : ICommandHandler<NextQuestionCommand, ErrorOr<Updated>>
 {
+    private sealed record NextQuestionOutcome(Question CurrentQuestion);
+
     public async ValueTask<ErrorOr<Updated>> Handle(NextQuestionCommand command, CancellationToken ct = default)
     {
         var validationResult = await validator.ValidateAsync(command, ct);
@@ -20,22 +24,14 @@ public sealed class NextQuestionCommandHandler(
             return validationResult.Errors
                 .Select(e => Error.Validation(e.PropertyName, e.ErrorMessage))
                 .ToList();
-        
-        var gameRoom = await gameRoomStore.GetByRoomCodeAsync(command.RoomCode, ct);
-        if (gameRoom is null)
-            return Error.NotFound("GameRoom.NotFound", "Room not found.");
-        
-        var nextResult = gameRoom.NextQuestion();
-        if (nextResult.IsError)
-            return nextResult.Errors;
-        
-        await gameRoomStore.SaveAsync(gameRoom, ct);
 
-        var questions = await questionStore.GetByQuizSetIdAsync(gameRoom.QuizSetId, ct);
-        var currentQuestion = questions.ElementAtOrDefault(gameRoom.CurrentQuestionIndex);
+        var result = await OptimisticConcurrency.ExecuteAsync(
+            gameRoomStore, command.RoomCode, (gameRoom, innerCt) => MutateAsync(gameRoom, innerCt), ct);
 
-        if (currentQuestion is null)
-            return Error.NotFound("Question.NotFound", "No more questions.");
+        if (result.IsError)
+            return result.Errors;
+
+        var currentQuestion = result.Value.CurrentQuestion;
 
         var payload = new
         {
@@ -45,9 +41,25 @@ public sealed class NextQuestionCommandHandler(
             currentQuestion.TimeLimitSeconds,
             Options = currentQuestion.Options.Select(o => new { o.Text, o.OrderIndex })
         };
-        
+
         await gameNotifier.QuestionStartedAsync(command.RoomCode, payload, ct);
 
         return Result.Updated;
+    }
+
+    private async Task<ErrorOr<NextQuestionOutcome>> MutateAsync(GameRoom gameRoom, CancellationToken ct)
+    {
+        var questions = await questionStore.GetByQuizSetIdAsync(gameRoom.QuizSetId, ct);
+        var nextQuestion = questions.ElementAtOrDefault(gameRoom.CurrentQuestionIndex + 1);
+
+        if (nextQuestion is null)
+            return Error.NotFound("Question.NotFound", "No more questions in this quiz.");
+
+        var nextResult = gameRoom.NextQuestion();
+
+        if (nextResult.IsError)
+            return nextResult.Errors;
+
+        return new NextQuestionOutcome(nextQuestion);
     }
 }

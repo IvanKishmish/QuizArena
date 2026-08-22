@@ -1,6 +1,7 @@
 using Mediator;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using QuizArena.Application.Features.GameRooms.Commands.CreateGameRoom;
 using QuizArena.Application.Features.GameRooms.Commands.JoinGameRoom;
 using QuizArena.Application.Features.GameRooms.Commands.StartGame;
@@ -19,6 +20,7 @@ public sealed class GameRoomsController(IMediator mediator) : ApiController(medi
     }
     
     [HttpPost("{roomCode}/join")]
+    [EnableRateLimiting("join-room")]
     public async Task<IActionResult> Join(string roomCode, JoinGameRoomRequest request, CancellationToken ct = default)
     {
         var command = new JoinGameRoomCommand(roomCode, request.DisplayName);
