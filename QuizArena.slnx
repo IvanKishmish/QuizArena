@@ -1,10 +1,10 @@
 <Solution>
-  <Folder Name="/benchmarks/">
-    <Project Path="benchmarks\QuizArena.Benchmarks\QuizArena.Benchmarks.csproj" Type="Classic C#" />
-  </Folder>
-  <Folder Name="/Consistency/">
-    <Project Path="research\consistency\QuizArena.ConsistencyTest\QuizArena.ConsistencyTest.csproj" Type="Classic C#" />
-  </Folder>
+<!--  <Folder Name="/benchmarks/">-->
+<!--    <Project Path="benchmarks\QuizArena.Benchmarks\QuizArena.Benchmarks.csproj" Type="Classic C#" />-->
+<!--  </Folder>-->
+<!--  <Folder Name="/Consistency/">-->
+<!--    <Project Path="research\consistency\QuizArena.ConsistencyTest\QuizArena.ConsistencyTest.csproj" Type="Classic C#" />-->
+<!--  </Folder>-->
   <Folder Name="/Core/">
     <Project Path="src/backend/QuizArena.Application/QuizArena.Application.csproj" Type="Classic C#" />
     <Project Path="src/backend/QuizArena.Domain/QuizArena.Domain.csproj" />
@@ -12,9 +12,9 @@
   <Folder Name="/Infrastructure/">
     <Project Path="src/backend/QuizArena.Persistence/QuizArena.Persistence.csproj" Type="Classic C#" />
   </Folder>
-  <Folder Name="/loadTest/">
-    <Project Path="research\loadtest\QuizArena.LoadTest\QuizArena.LoadTest.csproj" Type="Classic C#" />
-  </Folder>
+<!--  <Folder Name="/loadTest/">-->
+<!--    <Project Path="research\loadtest\QuizArena.LoadTest\QuizArena.LoadTest.csproj" Type="Classic C#" />-->
+<!--  </Folder>-->
   <Folder Name="/Presentation/">
     <Project Path="src/backend/QuizArena.WebApi/QuizArena.WebApi.csproj" Type="Classic C#" />
   </Folder>

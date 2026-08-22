@@ -27,6 +27,24 @@ public sealed class JoinGameRoomCommandHandler(
 
         var userId = currentUser.UserId;
 
+        if (userId is not null)
+        {
+            var room = await gameRoomStore.GetByRoomCodeAsync(command.RoomCode, ct);
+
+            if (room is null)
+                return Error.NotFound("GameRoom.NotFound", "Game room not found.");
+
+            var existingParticipant = room.Participants.FirstOrDefault(p => p.UserId == userId);
+
+            if (existingParticipant is not null)
+            {
+                var reconnectToken = participantTokenService
+                    .GenerateToken(command.RoomCode, existingParticipant.Id, userId);
+
+                return new JoinGameRoomResult(existingParticipant.Id, reconnectToken);
+            }
+        }
+
         var result = await OptimisticConcurrency.ExecuteAsync(
             gameRoomStore, command.RoomCode, (gameRoom, _) => Mutate(gameRoom, userId, command.DisplayName), ct);
 
@@ -41,14 +59,6 @@ public sealed class JoinGameRoomCommandHandler(
 
     private static Task<ErrorOr<JoinOutcome>> Mutate(GameRoom gameRoom, Guid? userId, string displayName)
     {
-        if (userId is not null)
-        {
-            var existingParticipant = gameRoom.Participants.FirstOrDefault(p => p.UserId == userId);
-
-            if (existingParticipant is not null)
-                return Task.FromResult<ErrorOr<JoinOutcome>>(new JoinOutcome(existingParticipant.Id, userId));
-        }
-
         Guid? guestId = userId is null ? Guid.CreateVersion7() : null;
 
         var addResult = gameRoom.AddParticipant(userId, guestId, displayName);
