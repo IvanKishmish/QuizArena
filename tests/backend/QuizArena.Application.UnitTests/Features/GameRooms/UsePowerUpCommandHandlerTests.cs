@@ -30,11 +30,6 @@ public class UsePowerUpCommandHandlerTests
             .Setup(x => x.ValidateAsync(It.IsAny<UsePowerUpCommand>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ValidationResult());
 
-    // K4: every mutation now goes through OptimisticConcurrency, which calls SaveAsync — an unconfigured
-    // mock defaults to `false` (conflict) and the handler retries, re-applying UsePowerUp to the *same*
-    // mocked GameRoom object on each attempt. For most of these tests that just means wasted retries before
-    // an eventual (wrong) Conflict error, but for a power-up specifically, a second in-memory application
-    // would hit "already used" — so this isn't optional for the success-path tests below.
     private void SetupSaveSucceeds()
         => _gameRoomStoreMock
             .Setup(x => x.SaveAsync(It.IsAny<GameRoom>(), It.IsAny<CancellationToken>()))
@@ -48,6 +43,15 @@ public class UsePowerUpCommandHandlerTests
         room.AddParticipant(Guid.CreateVersion7(), null, "Target");
         room.Start(); // grants default power-ups to every participant
         return (room, room.Participants[0], room.Participants[1]);
+    }
+
+    // Same as above, but also advances CurrentQuestionIndex from -1 (set by Start()) to 0, since
+    // Start() alone leaves no "current question" — FiftyFifty needs one to have anything to eliminate.
+    private static (GameRoom Room, Participant Caster, Participant Target) CreateInProgressRoomOnFirstQuestion()
+    {
+        var (room, caster, target) = CreateInProgressRoomWithTwoParticipants();
+        room.NextQuestion();
+        return (room, caster, target);
     }
 
     [Fact]
@@ -184,7 +188,7 @@ public class UsePowerUpCommandHandlerTests
     public async Task Handle_FiftyFifty_EliminatesExactlyTwoWrongOptionsForFourOptionQuestion()
     {
         // Arrange: a question with 1 correct + 3 wrong options => min(2, 3-1) = 2 eliminated
-        var (room, caster, _) = CreateInProgressRoomWithTwoParticipants();
+        var (room, caster, _) = CreateInProgressRoomOnFirstQuestion();
         var question = Question.Create(new QuestionCreationParams(
             "2 + 2 = ?", QuestionType.SingleChoice, 30, 100,
             [
@@ -223,7 +227,7 @@ public class UsePowerUpCommandHandlerTests
     public async Task Handle_FiftyFifty_WhenParticipantHasNoActiveConnection_SkipsDirectNotificationButStillSucceeds()
     {
         // Arrange: participant disconnected right after using the power-up (edge case)
-        var (room, caster, _) = CreateInProgressRoomWithTwoParticipants();
+        var (room, caster, _) = CreateInProgressRoomOnFirstQuestion();
         var question = Question.Create(new QuestionCreationParams(
             "2 + 2 = ?", QuestionType.SingleChoice, 30, 100,
             [
