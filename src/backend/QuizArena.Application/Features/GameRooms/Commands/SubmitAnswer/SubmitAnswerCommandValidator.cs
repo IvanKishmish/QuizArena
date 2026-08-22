@@ -18,7 +18,7 @@ public sealed class SubmitAnswerCommandValidator : AbstractValidator<SubmitAnswe
         RuleFor(x => x.SelectedOptionIndices)
             .NotNull().WithMessage("Selected options are required")
             .Must(indices => indices.Count <= 50)
-            .When(x => x.SelectedOptionIndices is not null)
+            .When(x => x.SelectedOptionIndices is not null, ApplyConditionTo.CurrentValidator)
             .WithMessage("SelectedOptionIndices cannot contain more than 50 entries");
     }
 }
