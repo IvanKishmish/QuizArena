@@ -1,39 +1,46 @@
-using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using QuizArena.Application.Common.Interfaces;
+using QuizArena.Application.Common.Options;
+using JwtRegisteredClaimNames = System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames;
 
 namespace QuizArena.WebApi.Services;
 
-public sealed class TokenService(IConfiguration configuration) : ITokenService
+public sealed class TokenService(IOptions<JwtOptions> jwtOptions) : ITokenService
 {
-    public string GenerateAccessToken(Guid userId, IReadOnlyList<string> roles)
+    private static readonly JsonWebTokenHandler Handler = new();
+
+    public string GenerateAccessToken(Guid userId, string? email, IReadOnlyList<string> roles)
     {
-        var secret = configuration["Jwt:Secret"]!;
-        var issuer = configuration["Jwt:Issuer"]!;
-        var audience = configuration["Jwt:Audience"]!;
-        var expiryMinutes = int.Parse(configuration["Jwt:ExpiryMinutes"]!);
+        var options = jwtOptions.Value;
 
         var claims = new List<Claim>
         {
-            new Claim(JwtRegisteredClaimNames.Sub, userId.ToString()),
+            new(JwtRegisteredClaimNames.Sub, userId.ToString())
         };
-        
+
+        if (!string.IsNullOrWhiteSpace(email))
+            claims.Add(new Claim(JwtRegisteredClaimNames.Email, email));
+
         claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role)));
 
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(options.Secret));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
-        var token = new JwtSecurityToken(
-            issuer: issuer,
-            audience: audience,
-            claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(expiryMinutes),
-            signingCredentials: credentials);
+        var descriptor = new SecurityTokenDescriptor
+        {
+            Issuer = options.Issuer,
+            Audience = options.Audience,
+            Expires = DateTime.UtcNow.AddMinutes(options.ExpiryMinutes),
+            SigningCredentials = credentials,
+            Subject = new ClaimsIdentity(claims)
+        };
 
-        return new JwtSecurityTokenHandler().WriteToken(token);
+        return Handler.CreateToken(descriptor);
     }
 
     public string GenerateRefreshToken()

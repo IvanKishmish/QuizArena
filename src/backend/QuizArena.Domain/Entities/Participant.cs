@@ -19,6 +19,9 @@ public sealed class Participant : TransientEntity
     public bool IsFrozen { get; private set; }
     public DateTimeOffset? FrozenUntil { get; private set; }
 
+    private readonly HashSet<Guid> _answeredQuestionIds = [];
+    public IReadOnlyCollection<Guid> AnsweredQuestionIds => _answeredQuestionIds;
+
     private Participant()
     { } // ef
 
@@ -39,6 +42,7 @@ public sealed class Participant : TransientEntity
         ActiveDoubleOrNothing = args.ActiveDoubleOrNothing;
         IsFrozen = args.IsFrozen;
         FrozenUntil = args.FrozenUntil;
+        _answeredQuestionIds = args.AnsweredQuestionIds.ToHashSet();
     }
     
     public static ErrorOr<Participant> Create(Guid? userId, Guid? guestId, string displayName)
@@ -60,14 +64,26 @@ public sealed class Participant : TransientEntity
         return new Participant(Guid.CreateVersion7(), userId, guestId, displayName);
     }
 
-    public ErrorOr<Updated> AddScore(int points)
+    private static readonly IReadOnlyList<PowerUpType> DefaultPowerUpKit =
+    [
+        PowerUpType.Freeze,
+        PowerUpType.FiftyFifty,
+        PowerUpType.DoubleOrNothing
+    ];
+
+    public ErrorOr<Updated> SubmitAnswer(Guid questionId, int pointsAwarded)
     {
-        if (points < 0)
+        if (_answeredQuestionIds.Contains(questionId))
+            return Error.Validation("Participant.AlreadyAnswered", "You have already answered this question.");
+
+        if (pointsAwarded < 0)
             return Error.Validation("Participant.NegativeScore", "Points to add cannot be negative");
 
+        _answeredQuestionIds.Add(questionId);
+
         var finalPoints = ActiveDoubleOrNothing == PowerUpType.DoubleOrNothing
-            ? points * 2
-            : points;
+            ? pointsAwarded * 2
+            : pointsAwarded;
 
         Score += finalPoints;
         ActiveDoubleOrNothing = null;
@@ -78,7 +94,7 @@ public sealed class Participant : TransientEntity
     public void GrantDefaultPowerUps()
     {
         _availablePowerUps.Clear();
-        _availablePowerUps.AddRange(Enum.GetValues<PowerUpType>());
+        _availablePowerUps.AddRange(DefaultPowerUpKit);
     }
 
     public ErrorOr<Updated> UsePowerUp(PowerUpType type)
@@ -94,15 +110,17 @@ public sealed class Participant : TransientEntity
         return Result.Updated;
     }
 
-    public void ApplyFreeze(TimeSpan duration)
+    public void ApplyFreeze(TimeSpan duration, TimeProvider? timeProvider = null)
     {
         IsFrozen = true;
-        FrozenUntil = DateTimeOffset.UtcNow.Add(duration);
+        FrozenUntil = (timeProvider ?? TimeProvider.System).GetUtcNow().Add(duration);
     }
 
-    public void ClearFreezeIfExpired()
+    public void ClearFreezeIfExpired(TimeProvider? timeProvider = null)
     {
-        if (IsFrozen && FrozenUntil is not null && DateTimeOffset.UtcNow >= FrozenUntil)
+        var now = (timeProvider ?? TimeProvider.System).GetUtcNow();
+
+        if (IsFrozen && FrozenUntil is not null && now >= FrozenUntil)
         {
             IsFrozen = false;
             FrozenUntil = null;

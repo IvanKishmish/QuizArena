@@ -13,6 +13,7 @@ using QuizArena.Persistence.Context;
 using QuizArena.Persistence.Identity;
 using QuizArena.Persistence.Interceptors;
 using QuizArena.Persistence.Mongo;
+using QuizArena.Persistence.Outbox;
 using QuizArena.Persistence.Redis;
 using StackExchange.Redis;
 
@@ -36,19 +37,14 @@ public static class DependencyInjection
 
         services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<AppDbContext>());
 
+        services.AddScoped<IOutboxWriter, OutboxWriter>();
+
         services.AddDbContext<ApplicationIdentityDbContext>(options =>
             options.UseNpgsql(connectionString));
-
-        services.AddIdentity<ApplicationUser, IdentityRole<Guid>>(options =>
-            {
-                options.Password.RequiredLength = 8;
-                options.Password.RequireNonAlphanumeric = false;
-                options.User.RequireUniqueEmail = true;
-            })
-            .AddEntityFrameworkStores<ApplicationIdentityDbContext>()
-            .AddDefaultTokenProviders();
         
         services.AddScoped<IIdentityService, IdentityService>();
+
+        services.AddHostedService<RefreshTokenCleanupService>();
         
         BsonSerializer.RegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
         
@@ -84,5 +80,17 @@ public static class DependencyInjection
         services.AddScoped<IIdentityUserQueryService, IdentityUserQueryService>();
 
         return services;
+    }
+    
+    public static IdentityBuilder AddPersistenceIdentity(this IServiceCollection services)
+    {
+        return services.AddIdentityCore<ApplicationUser>(options =>
+            {
+                options.Password.RequiredLength = 8;
+                options.Password.RequireNonAlphanumeric = false;
+                options.User.RequireUniqueEmail = true;
+            })
+            .AddRoles<IdentityRole<Guid>>()
+            .AddEntityFrameworkStores<ApplicationIdentityDbContext>();
     }
 }

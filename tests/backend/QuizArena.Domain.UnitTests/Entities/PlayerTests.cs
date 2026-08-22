@@ -109,20 +109,37 @@ public sealed class PlayerTests
         player.TotalScore.Should().Be(50);
     }
  
-    [Theory]
-    [InlineData(0)]
-    [InlineData(-10)]
-    public void RecordGameResult_WithZeroOrNegativeScore_ReturnsValidationError(int score)
+    [Fact]
+    public void RecordGameResult_WithZeroScore_IsAcceptedAsAValidGamePlayed()
+    {
+        // W6: a player who answered everything wrong (or didn't answer in time) still played the game —
+        // only a negative score is actually invalid data. The old rule rejected 0 as if it meant "didn't
+        // play", which is exactly why TotalGamesPlayed/TotalScore stayed 0 for real players once this method
+        // finally started being called (see SaveGameHistoryCommandHandler).
+        //Arrange
+        var player = CreatePlayer();
+ 
+        //Act
+        var result = player.RecordGameResult(0);
+ 
+        //Assert
+        result.IsError.Should().BeFalse();
+        player.TotalGamesPlayed.Should().Be(1);
+        player.TotalScore.Should().Be(0);
+    }
+
+    [Fact]
+    public void RecordGameResult_WithNegativeScore_ReturnsValidationError()
     {
         //Arrange
         var player = CreatePlayer();
  
         //Act
-        var result = player.RecordGameResult(score);
+        var result = player.RecordGameResult(-10);
  
         //Assert
         result.IsError.Should().BeTrue();
-        result.FirstError.Code.Should().Be("Player.NegativeOrEqualToZeroScore");
+        result.FirstError.Code.Should().Be("Player.NegativeScore");
         player.TotalGamesPlayed.Should().Be(0);
         player.TotalScore.Should().Be(0);
     }

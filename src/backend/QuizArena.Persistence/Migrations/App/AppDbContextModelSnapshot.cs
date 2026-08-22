@@ -41,6 +41,9 @@ namespace QuizArena.Persistence.Migrations.App
                     b.Property<int>("FinalScore")
                         .HasColumnType("integer");
 
+                    b.Property<Guid>("GameId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid?>("ParticipantUserId")
                         .HasColumnType("uuid");
 
@@ -57,6 +60,8 @@ namespace QuizArena.Persistence.Migrations.App
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("GameId");
 
                     b.HasIndex("ParticipantUserId");
 
@@ -140,6 +145,43 @@ namespace QuizArena.Persistence.Migrations.App
                     b.HasIndex("OwnerId");
 
                     b.ToTable("QuizSets", (string)null);
+                });
+
+            modelBuilder.Entity("QuizArena.Persistence.Outbox.OutboxMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTimeOffset>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("ProcessedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("RetryCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProcessedAt", "NextAttemptAt");
+
+                    b.ToTable("OutboxMessages", (string)null);
                 });
 #pragma warning restore 612, 618
         }

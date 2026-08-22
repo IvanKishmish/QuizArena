@@ -1,6 +1,7 @@
 using ErrorOr;
 using FluentValidation;
 using Mediator;
+using QuizArena.Application.Common;
 using QuizArena.Application.Common.Interfaces;
 
 namespace QuizArena.Application.Features.GameRooms.Commands.StartGame;
@@ -23,21 +24,15 @@ public sealed class StartGameCommandHandler(
         if (currentUser.UserId is null)
             return Error.Unauthorized("Auth.NotAuthenticated", "User is not authenticated.");
 
-        var gameRoom = await gameRoomStore.GetByRoomCodeAsync(command.RoomCode, ct);
+        var hostId = currentUser.UserId.Value;
 
-        if (gameRoom is null)
-            return Error.NotFound("GameRoom.NotFound", "Room not found.");
+        return await OptimisticConcurrency.ExecuteAsync(gameRoomStore, command.RoomCode, (gameRoom, _) =>
+        {
+            if (gameRoom.HostId != hostId)
+                return Task.FromResult<ErrorOr<Updated>>(
+                    Error.Forbidden("GameRoom.NotHost", "Only the host can start the game."));
 
-        if (gameRoom.HostId != currentUser.UserId)
-            return Error.Forbidden("GameRoom.NotHost", "Only the host can start the game.");
-
-        var startResult = gameRoom.Start();
-
-        if (startResult.IsError)
-            return startResult.Errors;
-        
-        await gameRoomStore.SaveAsync(gameRoom, ct);
-
-        return Result.Updated;
+            return Task.FromResult(gameRoom.Start());
+        }, ct);
     }
 }

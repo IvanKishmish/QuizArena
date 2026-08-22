@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using QuizArena.Application.Common.Interfaces;
 using QuizArena.Domain.Entities;
 
@@ -12,7 +13,7 @@ public sealed class RoomCodeGenerator(IGameRoomStore gameRoomStore) : IRoomCodeG
 
         do
         {
-            code = Random.Shared.Next(100000, 999999).ToString();
+            code = RandomNumberGenerator.GetInt32(100000, 1_000_000).ToString();
             existing = await gameRoomStore.GetByRoomCodeAsync(code, ct);
         } while (existing is not null);
 

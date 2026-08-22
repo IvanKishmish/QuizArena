@@ -15,10 +15,10 @@ public sealed class DeleteAnyQuizSetCommandHandler(IAppDbContext context, IQuest
             return Error.NotFound("QuizSet.NotFound", "Quiz set not found.");
         
         context.QuizSets.Remove(quizSet);
-        
-        await questionStore.DeleteByQuizSetIdAsync(quizSet.Id, ct);
-        
+
         await context.SaveChangesAsync(ct);
+
+        await questionStore.DeleteByQuizSetIdAsync(quizSet.Id, ct);
 
         return Result.Deleted;
     }

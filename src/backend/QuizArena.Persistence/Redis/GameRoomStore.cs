@@ -10,17 +10,49 @@ public sealed class GameRoomStore(IConnectionMultiplexer redis) : IGameRoomStore
 {
     private static readonly TimeSpan RoomExpiration = TimeSpan.FromHours(4);
 
+    private static readonly LuaScript CompareAndSwapScript = LuaScript.Prepare(
+        """
+        local current = redis.call('GET', @key)
+        local expectedVersion = tonumber(@expectedVersion)
+
+        if expectedVersion == 0 then
+            if current then
+                return 0
+            end
+        else
+            if not current then
+                return 0
+            end
+
+            local ok, decoded = pcall(cjson.decode, current)
+            if not ok or tonumber(decoded['Version']) ~= expectedVersion then
+                return 0
+            end
+        end
+
+        redis.call('SET', @key, @newValue, 'EX', @ttlSeconds)
+        return 1
+        """);
+
     private IDatabase Database => redis.GetDatabase();
 
     private static string Key(string roomCode) => $"gameroom:{roomCode}";
-    
-    public async Task SaveAsync(GameRoom gameRoom, CancellationToken ct = default)
+
+    public async Task<bool> SaveAsync(GameRoom gameRoom, CancellationToken ct = default)
     {
-        var snapshot = gameRoom.ToSnapshot();
-        
+        var expectedVersion = gameRoom.Version;
+        var snapshot = gameRoom.ToSnapshot() with { Version = expectedVersion + 1 };
         var json = JsonSerializer.Serialize(snapshot);
 
-        await Database.StringSetAsync(Key(gameRoom.RoomCode), json, RoomExpiration);
+        var result = await Database.ScriptEvaluateAsync(CompareAndSwapScript, new
+        {
+            key = (RedisKey)Key(gameRoom.RoomCode),
+            expectedVersion,
+            newValue = json,
+            ttlSeconds = (int)RoomExpiration.TotalSeconds
+        });
+
+        return (long)result == 1;
     }
 
     public async Task<GameRoom?> GetByRoomCodeAsync(string roomCode, CancellationToken ct = default)

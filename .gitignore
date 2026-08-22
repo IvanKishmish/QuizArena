@@ -54,3 +54,8 @@ desktop.ini
 *.msi
 *.msm
 *.msp
+
+*.csv
+
+research/
+benchmarks/

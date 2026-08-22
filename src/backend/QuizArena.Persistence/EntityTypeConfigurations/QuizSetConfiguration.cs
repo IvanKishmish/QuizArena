@@ -30,8 +30,8 @@ public sealed class QuizSetConfiguration : IEntityTypeConfiguration<QuizSet>
         builder.Property(x => x.OwnerId)
             .IsRequired();
 
-        // Questions live in MongoDB, not Postgres — EF Core must not try to map this collection
-        builder.Ignore(x => x.Questions);
+        // Questions live in MongoDB as their own aggregate (QuestionDocument, keyed by QuizSetId) — QuizSet
+        // no longer carries a Questions collection at all, so there's nothing here to Ignore() anymore.
 
         builder.Property(x => x.CreatedAt).IsRequired();
         builder.Property(x => x.CreatedBy).IsRequired();

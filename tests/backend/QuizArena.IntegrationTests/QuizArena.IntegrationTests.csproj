@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <IsPackable>false</IsPackable>
+    </PropertyGroup>
+
+    <!--
+      S4: "Единственный интеграционный тест сквозного сценария на Testcontainers... Один такой тест ловит
+      K1, K2 и K5 сразу." This project is that missing layer — 284 unit tests were all mocks-and-domain,
+      so none of them ever touched real Mongo serialization, real Redis snapshots, or a real JWT round trip,
+      which is exactly where every one of the five critical bugs lived.
+
+      NOTE: this project needs `dotnet restore` with real internet access to nuget.org to build — something
+      this sandbox does not have (see the review response for why none of this pass could be verified with a
+      real `dotnet build`). Package versions below are believable/current as of early 2026 but not
+      confirmed against the live registry; run `dotnet restore` and bump anything NuGet complains about
+      before trusting this project to run.
+    -->
+    <ItemGroup>
+        <PackageReference Include="FluentAssertions" Version="8.10.0" />
+        <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.0" />
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+        <PackageReference Include="Testcontainers.PostgreSql" Version="4.1.0" />
+        <PackageReference Include="Testcontainers.MongoDb" Version="4.1.0" />
+        <PackageReference Include="Testcontainers.Redis" Version="4.1.0" />
+        <PackageReference Include="xunit" Version="2.9.3" />
+        <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Using Include="Xunit" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\..\src\backend\QuizArena.WebApi\QuizArena.WebApi.csproj" />
+    </ItemGroup>
+
+</Project>

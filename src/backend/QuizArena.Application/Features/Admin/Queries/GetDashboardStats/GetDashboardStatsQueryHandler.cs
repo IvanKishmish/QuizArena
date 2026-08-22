@@ -14,7 +14,8 @@ public sealed class GetDashboardStatsQueryHandler(IAppDbContext context)
         var totalUsers = await context.Players.CountAsync(ct);
         var totalQuizSets = await context.QuizSets.CountAsync(ct);
         var totalPublished = await context.QuizSets.CountAsync(qs => qs.Visibility == Visibility.Public, ct);
-        var totalGames = await context.GameHistory.Select(g => g.Id).Distinct().CountAsync(ct);
+
+        var totalGames = await context.GameHistory.Select(g => g.GameId).Distinct().CountAsync(ct);
 
         return new DashboardStats(totalUsers, totalQuizSets, totalPublished, totalGames);
     }

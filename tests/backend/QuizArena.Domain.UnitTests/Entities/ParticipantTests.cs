@@ -2,6 +2,7 @@ using ErrorOr;
 using FluentAssertions;
 using QuizArena.Domain.Entities;
 using QuizArena.Domain.Enums;
+using QuizArena.Domain.UnitTests.Common;
 
 namespace QuizArena.Domain.UnitTests.Entities;
 
@@ -79,14 +80,17 @@ public sealed class ParticipantTests
         result.FirstError.Code.Should().Be("Participant.ConflictingIdentity");
     }
 
+    // K2: AddScore(points) was replaced with SubmitAnswer(questionId, points) — the extra questionId is
+    // what makes a second submission for the same question rejected instead of scored again.
+
     [Fact]
-    public void AddScore_WithPositivePoints_IncreasesScore()
+    public void SubmitAnswer_WithPositivePoints_IncreasesScore()
     {
         //Arrange
         var participant = CreateParticipant();
 
         //Act
-        var result = participant.AddScore(10);
+        var result = participant.SubmitAnswer(Guid.CreateVersion7(), 10);
 
         //Assert
         result.IsError.Should().BeFalse();
@@ -94,13 +98,13 @@ public sealed class ParticipantTests
     }
     
     [Fact]
-    public void AddScore_WithNegativePoints_ReturnsValidationError()
+    public void SubmitAnswer_WithNegativePoints_ReturnsValidationError()
     {
         //Arrange
         var participant = CreateParticipant();
 
         //Act
-        var result = participant.AddScore(-5);
+        var result = participant.SubmitAnswer(Guid.CreateVersion7(), -5);
 
         //Assert
         result.IsError.Should().BeTrue();
@@ -109,13 +113,13 @@ public sealed class ParticipantTests
     }
     
     [Fact]
-    public void AddScore_WithZeroPoints_IsAllowedAndDoesNotChangeScore()
+    public void SubmitAnswer_WithZeroPoints_IsAllowedAndDoesNotChangeScore()
     {
         //Arrange
         var participant = CreateParticipant();
 
         //Act
-        var result = participant.AddScore(0);
+        var result = participant.SubmitAnswer(Guid.CreateVersion7(), 0);
 
         //Assert
         result.IsError.Should().BeFalse();
@@ -123,7 +127,7 @@ public sealed class ParticipantTests
     }
 
     [Fact]
-    public void AddScore_WithActiveDoubleOrNothing_DoublesPointsAndClearsIt()
+    public void SubmitAnswer_WithActiveDoubleOrNothing_DoublesPointsAndClearsIt()
     {
         //Arrange
         var participant = CreateParticipant();
@@ -131,12 +135,59 @@ public sealed class ParticipantTests
         participant.UsePowerUp(PowerUpType.DoubleOrNothing);
 
         //Act
-        var result = participant.AddScore(10);
+        var result = participant.SubmitAnswer(Guid.CreateVersion7(), 10);
 
         //Assert
         result.IsError.Should().BeFalse();
         participant.Score.Should().Be(20);
         participant.ActiveDoubleOrNothing.Should().BeNull();
+    }
+
+    [Fact]
+    public void SubmitAnswer_ForTheSameQuestionTwice_RejectsTheSecondSubmission()
+    {
+        //Arrange
+        var participant = CreateParticipant();
+        var questionId = Guid.CreateVersion7();
+        participant.SubmitAnswer(questionId, 10);
+
+        //Act
+        var result = participant.SubmitAnswer(questionId, 10);
+
+        //Assert
+        result.IsError.Should().BeTrue();
+        result.FirstError.Code.Should().Be("Participant.AlreadyAnswered");
+        // The score from the rejected replay must not be added again.
+        participant.Score.Should().Be(10);
+    }
+
+    [Fact]
+    public void SubmitAnswer_ForADifferentQuestion_IsAccepted()
+    {
+        //Arrange
+        var participant = CreateParticipant();
+        participant.SubmitAnswer(Guid.CreateVersion7(), 10);
+
+        //Act
+        var result = participant.SubmitAnswer(Guid.CreateVersion7(), 5);
+
+        //Assert
+        result.IsError.Should().BeFalse();
+        participant.Score.Should().Be(15);
+    }
+
+    [Fact]
+    public void SubmitAnswer_RecordsTheQuestionInAnsweredQuestionIds()
+    {
+        //Arrange
+        var participant = CreateParticipant();
+        var questionId = Guid.CreateVersion7();
+
+        //Act
+        participant.SubmitAnswer(questionId, 10);
+
+        //Assert
+        participant.AnsweredQuestionIds.Should().ContainSingle().Which.Should().Be(questionId);
     }
     
     [Fact]
@@ -149,7 +200,13 @@ public sealed class ParticipantTests
         participant.GrantDefaultPowerUps();
 
         //Assert
-        participant.AvailablePowerUps.Should().BeEquivalentTo(Enum.GetValues<PowerUpType>());
+        // S8: explicit kit, not "every enum value" — see GameRoomTests' equivalent assertion for why.
+        participant.AvailablePowerUps.Should().BeEquivalentTo(
+        [
+            PowerUpType.Freeze,
+            PowerUpType.FiftyFifty,
+            PowerUpType.DoubleOrNothing
+        ]);
     }
 
     [Fact]
@@ -275,10 +332,14 @@ public sealed class ParticipantTests
     [Fact]
     public void ClearFreezeIfExpired_WhenFreezeExpired_ClearsFreezeState()
     {
+        // S13: used to be `ApplyFreeze(1ms); Thread.Sleep(20);` — a real wall-clock wait to make "expired"
+        // true, and exactly the kind of assumption that occasionally flakes under CI load. A fixed
+        // TimeProvider representing "an hour ago" makes FrozenUntil already-expired deterministically,
+        // with no timing dependency at all.
         //Arrange
         var participant = CreateParticipant();
-        participant.ApplyFreeze(TimeSpan.FromMilliseconds(1));
-        Thread.Sleep(20);
+        var anHourAgo = new FakeTimeProvider(DateTimeOffset.UtcNow.AddHours(-1));
+        participant.ApplyFreeze(TimeSpan.Zero, anHourAgo);
 
         //Act
         participant.ClearFreezeIfExpired();

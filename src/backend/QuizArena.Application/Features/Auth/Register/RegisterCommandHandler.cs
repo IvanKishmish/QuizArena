@@ -2,7 +2,9 @@ using QuizArena.Application.Common.Interfaces;
 using ErrorOr;
 using FluentValidation;
 using Mediator;
+using Microsoft.Extensions.Options;
 using QuizArena.Application.Common;
+using QuizArena.Application.Common.Options;
 using QuizArena.Application.Features.Auth.Common;
 using QuizArena.Application.Features.Auth.Events;
 using QuizArena.Domain.Entities;
@@ -12,13 +14,12 @@ namespace QuizArena.Application.Features.Auth.Register;
 public sealed class RegisterCommandHandler(
     IIdentityService identityService,
     IAppDbContext dbContext,
+    IOutboxWriter outboxWriter,
     IValidator<RegisterCommand> validator,
     ITokenService tokenService,
-    IPublisher publisher)
+    IOptions<JwtOptions> jwtOptions)
 : ICommandHandler<RegisterCommand, ErrorOr<TokenPair>>
 {
-    private static readonly TimeSpan RefreshTokenLifetime = TimeSpan.FromDays(7);
-    
     public async ValueTask<ErrorOr<TokenPair>> Handle(RegisterCommand command, CancellationToken ct = default)
     {
         var validationResult = await validator.ValidateAsync(command, ct);
@@ -39,18 +40,23 @@ public sealed class RegisterCommandHandler(
             return playerResult.Errors;
         
         dbContext.Players.Add(playerResult.Value);
+
+        outboxWriter.Enqueue(new WelcomeEmailMessage(userIdResult.Value, command.Email, command.NickName));
+
         await dbContext.SaveChangesAsync(ct);
         
         var roles = await identityService.GetUserRolesAsync(userIdResult.Value, ct);
 
-        var accessToken = tokenService.GenerateAccessToken(userIdResult.Value, roles);
+        var accessToken = tokenService.GenerateAccessToken(userIdResult.Value, command.Email, roles);
         var refreshToken = tokenService.GenerateRefreshToken();
         var refreshTokenHash = TokenHasher.Hash(refreshToken);
 
-        await identityService.StoreRefreshTokenAsync(userIdResult.Value, refreshTokenHash, RefreshTokenLifetime, ct);
+        var familyId = Guid.CreateVersion7();
+        var refreshLifetime = TimeSpan.FromDays(jwtOptions.Value.RefreshTokenExpiryDays);
 
-        await publisher.Publish(new UserRegisteredNotification(userIdResult.Value, command.Email, command.NickName), ct);
-        
+        await identityService
+            .StoreRefreshTokenAsync(userIdResult.Value, familyId, refreshTokenHash, refreshLifetime, ct);
+
         return new TokenPair(accessToken, refreshToken);
     }
 }

@@ -11,7 +11,8 @@ using QuizArena.Domain.Enums;
 namespace QuizArena.WebApi.Hubs;
 
 public sealed class GameHub
-    (IMediator mediator, IConnectionTracker connectionTracker, IGameRoomStore gameRoomStore)
+    (IMediator mediator, IConnectionTracker connectionTracker, IGameRoomStore gameRoomStore,
+        IParticipantTokenService participantTokenService)
     : Hub
 {
     private async Task<bool> IsVerifiedParticipantAsync(Guid claimedParticipantId, CancellationToken ct = default)
@@ -31,8 +32,29 @@ public sealed class GameHub
         return gameRoom is not null && gameRoom.HostId == userId;
     }
     
-    public async Task RegisterParticipant(string roomCode, Guid participantId, CancellationToken ct = default)
+    public async Task RegisterParticipant(string roomCode, Guid participantId, string participantToken)
     {
+        var ct = Context.ConnectionAborted;
+
+        var validation = await participantTokenService.ValidateAsync(participantToken, roomCode, participantId, ct);
+
+        if (validation is null)
+        {
+            await Clients.Caller.SendAsync("Error", "Invalid or expired participant token.", ct);
+            return;
+        }
+
+        if (validation.UserId is not null)
+        {
+            var callerUserIdClaim = Context.User?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+
+            if (!Guid.TryParse(callerUserIdClaim, out var callerUserId) || callerUserId != validation.UserId)
+            {
+                await Clients.Caller.SendAsync("Error", "This participant belongs to a different account.", ct);
+                return;
+            }
+        }
+
         await connectionTracker.RegisterConnectionAsync(participantId, Context.ConnectionId, ct);
 
         var gameRoom = await gameRoomStore.GetByRoomCodeAsync(roomCode, ct);
@@ -67,20 +89,27 @@ public sealed class GameHub
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, roomCode);
     }
 
-    public async Task NextQuestion(string roomCode, CancellationToken ct = default)
+    public async Task NextQuestion(string roomCode)
     {
+        var ct = Context.ConnectionAborted;
+        
         if (!await IsRoomHostAsync(roomCode, ct))
         {
             await Clients.Caller.SendAsync("Error", "Only the host can advance the question.", ct);
             return;
         }
 
-        await mediator.Send(new NextQuestionCommand(roomCode), ct);
+        var result = await mediator.Send(new NextQuestionCommand(roomCode), ct);
+
+        if (result.IsError)
+            await Clients.Caller.SendAsync("Error", result.FirstError.Description, ct);
     }
 
     public async Task SubmitAnswer(string roomCode, Guid participantId, Guid questionId,
-        List<int> selectedOptionIndices, CancellationToken ct = default)
+        List<int> selectedOptionIndices)
     {
+        var ct = Context.ConnectionAborted;
+        
         if (!await IsVerifiedParticipantAsync(participantId, ct))
         {
             await Clients.Caller.SendAsync("Error", "Unauthorized participant.", ct);
@@ -96,26 +125,37 @@ public sealed class GameHub
             await Clients.Caller.SendAsync("AnswerResult", new { Score = result.Value }, ct);
     }
 
-    public async Task EndGame(string roomCode, CancellationToken ct = default)
+    public async Task EndGame(string roomCode)
     {
+        var ct = Context.ConnectionAborted;
+        
         if (!await IsRoomHostAsync(roomCode, ct))
         {
             await Clients.Caller.SendAsync("Error", "Only the host can end the game.", ct);
             return;
         }
 
-        await mediator.Send(new EndGameCommand(roomCode), ct);
+        var result = await mediator.Send(new EndGameCommand(roomCode), ct);
+
+        if (result.IsError)
+            await Clients.Caller.SendAsync("Error", result.FirstError.Description, ct);
     }
 
     public async Task UsePowerUp(string roomCode, Guid participantId, PowerUpType powerUpType,
-        Guid? targetParticipantId, CancellationToken ct = default)
+        Guid? targetParticipantId)
     {
+        var ct = Context.ConnectionAborted;
+        
         if (!await IsVerifiedParticipantAsync(participantId, ct))
         {
             await Clients.Caller.SendAsync("Error", "Unauthorized participant.", ct);
             return;
         }
 
-        await mediator.Send(new UsePowerUpCommand(roomCode, participantId, powerUpType, targetParticipantId), ct);
+        var result = await mediator
+            .Send(new UsePowerUpCommand(roomCode, participantId, powerUpType, targetParticipantId), ct);
+
+        if (result.IsError)
+            await Clients.Caller.SendAsync("Error", result.FirstError.Description, ct);
     }
 }

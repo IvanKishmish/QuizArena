@@ -14,4 +14,6 @@ public sealed record GameRoomSnapshot
     public required List<ParticipantSnapshot> Participants { get; init; }
     public required DateTimeOffset? StartedAt { get; init; }
     public required DateTimeOffset? FinishedAt { get; init; }
+
+    public required long Version { get; init; }
 }

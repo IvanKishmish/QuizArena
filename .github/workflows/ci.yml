@@ -31,11 +31,29 @@ jobs:
       - name: Restore
         run: dotnet restore QuizArena.slnx
 
+      - name: Check for vulnerable NuGet packages
+        run: |
+          set -o pipefail
+          dotnet list QuizArena.slnx package --vulnerable --include-transitive | tee vulnerable-packages.txt
+          if grep -q "has the following vulnerable packages" vulnerable-packages.txt; then
+            echo "::error::Vulnerable NuGet packages detected — see the step output above."
+            exit 1
+          fi
+
       - name: Build
         run: dotnet build QuizArena.slnx --no-restore --configuration Release
 
-      - name: Test
-        run: dotnet test QuizArena.slnx --no-build --configuration Release --logger "trx;LogFileName=test-results.trx"
+      - name: Test (unit)
+        run: >
+          dotnet test QuizArena.slnx --no-build --configuration Release
+          --filter "FullyQualifiedName!~QuizArena.IntegrationTests"
+          --logger "trx;LogFileName=unit-test-results.trx"
+
+      - name: Test (integration)
+        run: >
+          dotnet test tests/backend/QuizArena.IntegrationTests/QuizArena.IntegrationTests.csproj
+          --no-build --configuration Release
+          --logger "trx;LogFileName=integration-test-results.trx"
 
       - name: Publish test results
         if: always()

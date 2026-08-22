@@ -1,10 +1,12 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using Moq;
 using QuizArena.Application.Common.Interfaces;
 using QuizArena.Application.Common.Interfaces.Leaderboard;
+using QuizArena.Application.Features.GameHistory.Commands.SaveGameHistory;
+using QuizArena.Application.Features.GameHistory.Events;
 using QuizArena.Application.Features.GameRooms.Events;
+using QuizArena.Domain.Entities;
 using QuizArena.Persistence.Context;
 
 namespace QuizArena.Application.UnitTests.Features.GameRooms.Events;
@@ -50,11 +52,19 @@ public class NotifyGameFinishedHandlerTests
     }
 }
 
-public class SaveGameHistoryHandlerTests : IDisposable
+// This handler used to not exist as production code at all — see the review response (W3/W6/W4/W7).
+// GameHistoryEntry/GetMyGameHistory/the admin dashboard's "total games" stat all assumed *something* wrote
+// to GameHistory, but nothing shipped ever did; only tests seeded it directly. SaveGameHistoryCommandHandler
+// is the actual write path, and it's also where Player stats finally get updated (W6) and game-results
+// emails get queued to the outbox (W4) — both of those naturally belong at "a game just produced a final
+// leaderboard", which is exactly this moment.
+public class SaveGameHistoryCommandHandlerTests : IDisposable
 {
     private readonly AppDbContext _dbContext;
+    private readonly Mock<IIdentityService> _identityServiceMock = new();
+    private readonly Mock<IOutboxWriter> _outboxWriterMock = new();
 
-    public SaveGameHistoryHandlerTests()
+    public SaveGameHistoryCommandHandlerTests()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
             .UseInMemoryDatabase(Guid.CreateVersion7().ToString())
@@ -64,10 +74,14 @@ public class SaveGameHistoryHandlerTests : IDisposable
 
     public void Dispose() => _dbContext.Dispose();
 
+    private SaveGameHistoryCommandHandler CreateHandler()
+        => new(_dbContext, _identityServiceMock.Object, _outboxWriterMock.Object);
+
     [Fact]
-    public async Task Handle_SavesOneHistoryEntryPerLeaderboardRowWithCorrectPlacement()
+    public async Task Handle_SavesOneHistoryEntryPerLeaderboardRowWithCorrectGameIdAndPlacement()
     {
-        // Arrange: leaderboard order defines placement (1st, 2nd, 3rd — 1-based, not 0-based)
+        // Arrange: leaderboard order defines placement (1st, 2nd, ... — 1-based, not 0-based)
+        var gameId = Guid.CreateVersion7();
         var quizSetId = Guid.CreateVersion7();
         var winnerUserId = Guid.CreateVersion7();
         var leaderboard = new List<LeaderboardEntry>
@@ -80,21 +94,26 @@ public class SaveGameHistoryHandlerTests : IDisposable
             [leaderboard[0].ParticipantId] = winnerUserId,
             [leaderboard[1].ParticipantId] = null // guest, no registered account
         };
-        var handler = new SaveGameHistoryHandler(_dbContext);
-        var notification = new GameFinishedNotification("ABC123", quizSetId, leaderboard, participantUserIds);
+        var handler = CreateHandler();
+        var command = new SaveGameHistoryCommand(gameId, quizSetId, leaderboard, participantUserIds);
 
         // Act
-        await handler.Handle(notification);
+        var result = await handler.Handle(command);
 
         // Assert
+        result.IsError.Should().BeFalse();
+
         var savedEntries = _dbContext.GameHistory.OrderBy(e => e.Placement).ToList();
         savedEntries.Should().HaveCount(2);
 
+        savedEntries[0].GameId.Should().Be(gameId); // W7: shared by every row from this one game
+        savedEntries[0].QuizSetId.Should().Be(quizSetId);
         savedEntries[0].DisplayName.Should().Be("Winner");
         savedEntries[0].Placement.Should().Be(1);
         savedEntries[0].ParticipantUserId.Should().Be(winnerUserId);
         savedEntries[0].FinalScore.Should().Be(200);
 
+        savedEntries[1].GameId.Should().Be(gameId);
         savedEntries[1].DisplayName.Should().Be("RunnerUp");
         savedEntries[1].Placement.Should().Be(2);
         savedEntries[1].ParticipantUserId.Should().BeNull(); // guest player, correctly preserved as null
@@ -103,132 +122,144 @@ public class SaveGameHistoryHandlerTests : IDisposable
     [Fact]
     public async Task Handle_WithEmptyLeaderboard_SavesNothingButStillSucceeds()
     {
-        var handler = new SaveGameHistoryHandler(_dbContext);
-        var notification = new GameFinishedNotification("ABC123", Guid.CreateVersion7(), [], new Dictionary<Guid, Guid?>());
+        var handler = CreateHandler();
+        var command = new SaveGameHistoryCommand(
+            Guid.CreateVersion7(), Guid.CreateVersion7(), [], new Dictionary<Guid, Guid?>());
 
-        await handler.Handle(notification);
+        var result = await handler.Handle(command);
 
+        result.IsError.Should().BeFalse();
         _dbContext.GameHistory.Should().BeEmpty();
     }
-}
-
-public class SendGameResultsEmailHandlerTests
-{
-    private readonly Mock<IIdentityService> _identityServiceMock = new();
-    private readonly Mock<IEmailSender> _emailSenderMock = new();
-    private readonly Mock<ILogger<SendGameResultsEmailHandler>> _loggerMock = new();
-
-    private SendGameResultsEmailHandler CreateHandler()
-        => new(_identityServiceMock.Object, _emailSenderMock.Object, _loggerMock.Object);
 
     [Fact]
-    public async Task Handle_WhenNoParticipantHasARegisteredAccount_SendsNoEmailsAndSkipsIdentityLookup()
+    public async Task Handle_ForRegisteredParticipant_UpdatesPlayerTotalScoreAndGamesPlayed()
     {
-        // Arrange: an all-guest game
+        // W6: Player.RecordGameResult existed and was fully unit-tested, but nothing in production ever
+        // called it — TotalGamesPlayed/TotalScore stayed 0 for every real player, forever.
+        // Arrange
+        var userId = Guid.CreateVersion7();
+        var player = Player.Create(userId, "Ivan").Value;
+        _dbContext.Players.Add(player);
+        await _dbContext.SaveChangesAsync();
+
+        var leaderboard = new List<LeaderboardEntry> { new(Guid.CreateVersion7(), "Ivan", 150) };
+        var participantUserIds = new Dictionary<Guid, Guid?> { [leaderboard[0].ParticipantId] = userId };
         var handler = CreateHandler();
-        var leaderboard = new List<LeaderboardEntry> { new(Guid.CreateVersion7(), "Guest1", 50) };
-        var participantUserIds = new Dictionary<Guid, Guid?> { [leaderboard[0].ParticipantId] = null };
-        var notification = new GameFinishedNotification("ABC123", Guid.CreateVersion7(), leaderboard, participantUserIds);
 
         // Act
-        await handler.Handle(notification);
+        await handler.Handle(new SaveGameHistoryCommand(Guid.CreateVersion7(), Guid.CreateVersion7(), leaderboard, participantUserIds));
 
         // Assert
-        _identityServiceMock.Verify(
-            x => x.GetEmailsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()), Times.Never);
-        _emailSenderMock.Verify(
-            x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
-            Times.Never);
+        var updatedPlayer = await _dbContext.Players.SingleAsync(p => p.Id == userId);
+        updatedPlayer.TotalGamesPlayed.Should().Be(1);
+        updatedPlayer.TotalScore.Should().Be(150);
     }
 
     [Fact]
-    public async Task Handle_SendsWinnerEmailWithTrophySubjectToFirstPlace()
+    public async Task Handle_ForRegisteredParticipantWithZeroScore_StillCountsAsAGamePlayed()
     {
-        // Arrange
-        var winnerUserId = Guid.CreateVersion7();
-        var leaderboard = new List<LeaderboardEntry> { new(Guid.CreateVersion7(), "Ivan", 300) };
-        var participantUserIds = new Dictionary<Guid, Guid?> { [leaderboard[0].ParticipantId] = winnerUserId };
-        var notification = new GameFinishedNotification("ABC123", Guid.CreateVersion7(), leaderboard, participantUserIds);
+        // W6: 0 is a valid outcome (answered everything wrong / never in time) — only a negative score would
+        // be invalid data. See PlayerTests for the domain-level version of this same fix.
+        var userId = Guid.CreateVersion7();
+        _dbContext.Players.Add(Player.Create(userId, "Ivan").Value);
+        await _dbContext.SaveChangesAsync();
 
-        _identityServiceMock
-            .Setup(x => x.GetEmailsAsync(It.Is<IReadOnlyCollection<Guid>>(ids => ids.Contains(winnerUserId)), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Dictionary<Guid, string> { [winnerUserId] = "ivan@test.com" });
+        var leaderboard = new List<LeaderboardEntry> { new(Guid.CreateVersion7(), "Ivan", 0) };
+        var participantUserIds = new Dictionary<Guid, Guid?> { [leaderboard[0].ParticipantId] = userId };
         var handler = CreateHandler();
 
-        // Act
-        await handler.Handle(notification);
+        await handler.Handle(new SaveGameHistoryCommand(Guid.CreateVersion7(), Guid.CreateVersion7(), leaderboard, participantUserIds));
 
-        // Assert: 1st place gets the "You won" subject line
-        _emailSenderMock.Verify(
-            x => x.SendAsync("ivan@test.com", It.Is<string>(s => s.Contains("won")), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+        var updatedPlayer = await _dbContext.Players.SingleAsync(p => p.Id == userId);
+        updatedPlayer.TotalGamesPlayed.Should().Be(1);
+        updatedPlayer.TotalScore.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Handle_ForGuestParticipant_DoesNotTouchAnyPlayerRow()
+    {
+        var leaderboard = new List<LeaderboardEntry> { new(Guid.CreateVersion7(), "Guest1", 50) };
+        var participantUserIds = new Dictionary<Guid, Guid?> { [leaderboard[0].ParticipantId] = null };
+        var handler = CreateHandler();
+
+        var result = await handler.Handle(
+            new SaveGameHistoryCommand(Guid.CreateVersion7(), Guid.CreateVersion7(), leaderboard, participantUserIds));
+
+        result.IsError.Should().BeFalse();
+        _dbContext.Players.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Handle_ForRegisteredParticipantWithKnownEmail_EnqueuesGameResultsEmailOnOutbox()
+    {
+        // W4: this used to be a Task.WhenAll of live SMTP sends from inside SendGameResultsEmailHandler — a
+        // notification handler completely decoupled from whether the game history it was reporting on ever
+        // actually saved. Now it's an outbox row written in the *same* SaveChangesAsync as the GameHistory
+        // rows and the Player update above, via IOutboxWriter — see OutboxWriter for how that becomes
+        // transactional.
+        var userId = Guid.CreateVersion7();
+        var leaderboard = new List<LeaderboardEntry> { new(Guid.CreateVersion7(), "Ivan", 300) };
+        var participantUserIds = new Dictionary<Guid, Guid?> { [leaderboard[0].ParticipantId] = userId };
+        _identityServiceMock
+            .Setup(x => x.GetEmailsAsync(It.Is<IReadOnlyCollection<Guid>>(ids => ids.Contains(userId)), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<Guid, string> { [userId] = "ivan@test.com" });
+        var handler = CreateHandler();
+
+        await handler.Handle(new SaveGameHistoryCommand(Guid.CreateVersion7(), Guid.CreateVersion7(), leaderboard, participantUserIds));
+
+        _outboxWriterMock.Verify(
+            x => x.Enqueue(It.Is<GameResultsEmailMessage>(m =>
+                m.Email == "ivan@test.com" && m.Score == 300 && m.Placement == 1 && m.IsWinner)),
             Times.Once);
     }
 
     [Fact]
-    public async Task Handle_SendsRunnerUpEmailWithPlacementSubject_NotWinnerSubject()
+    public async Task Handle_ForRunnerUp_EnqueuesEmailWithIsWinnerFalse()
     {
-        // Arrange
+        var winnerUserId = Guid.CreateVersion7();
         var runnerUpUserId = Guid.CreateVersion7();
         var leaderboard = new List<LeaderboardEntry>
         {
             new(Guid.CreateVersion7(), "Winner", 300),
-            new(Guid.CreateVersion7(), "SecondPlace", 200)
+            new(Guid.CreateVersion7(), "RunnerUp", 200)
         };
         var participantUserIds = new Dictionary<Guid, Guid?>
         {
-            [leaderboard[0].ParticipantId] = null, // guest winner — no email possible
+            [leaderboard[0].ParticipantId] = winnerUserId,
             [leaderboard[1].ParticipantId] = runnerUpUserId
         };
-        var notification = new GameFinishedNotification("ABC123", Guid.CreateVersion7(), leaderboard, participantUserIds);
-
         _identityServiceMock
             .Setup(x => x.GetEmailsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Dictionary<Guid, string> { [runnerUpUserId] = "second@test.com" });
+            .ReturnsAsync(new Dictionary<Guid, string>
+            {
+                [winnerUserId] = "winner@test.com",
+                [runnerUpUserId] = "runnerup@test.com"
+            });
         var handler = CreateHandler();
 
-        // Act
-        await handler.Handle(notification);
+        await handler.Handle(new SaveGameHistoryCommand(Guid.CreateVersion7(), Guid.CreateVersion7(), leaderboard, participantUserIds));
 
-        // Assert: placement #2, not the winner subject
-        _emailSenderMock.Verify(
-            x => x.SendAsync(
-                "second@test.com",
-                It.Is<string>(s => s.Contains("#2") && !s.Contains("won")),
-                It.IsAny<string>(),
-                It.IsAny<CancellationToken>()),
+        _outboxWriterMock.Verify(
+            x => x.Enqueue(It.Is<GameResultsEmailMessage>(m =>
+                m.Email == "runnerup@test.com" && m.Placement == 2 && !m.IsWinner)),
             Times.Once);
     }
 
     [Fact]
-    public async Task Handle_WhenEmailSenderThrowsForOneRecipient_StillCompletesWithoutThrowing()
+    public async Task Handle_ForGuestParticipant_EnqueuesNoEmail()
     {
-        // Arrange: this mirrors SendWelcomeEmailHandler's defensive try/catch —
-        // one failed email must not affect other recipients or bubble up.
-        var userId = Guid.CreateVersion7();
-        var leaderboard = new List<LeaderboardEntry> { new(Guid.CreateVersion7(), "Ivan", 100) };
-        var participantUserIds = new Dictionary<Guid, Guid?> { [leaderboard[0].ParticipantId] = userId };
-        var notification = new GameFinishedNotification("ABC123", Guid.CreateVersion7(), leaderboard, participantUserIds);
-
-        _identityServiceMock
-            .Setup(x => x.GetEmailsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Dictionary<Guid, string> { [userId] = "ivan@test.com" });
-        _emailSenderMock
-            .Setup(x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new HttpRequestException("Resend API is down"));
+        // Arrange: an all-guest game
+        var leaderboard = new List<LeaderboardEntry> { new(Guid.CreateVersion7(), "Guest1", 50) };
+        var participantUserIds = new Dictionary<Guid, Guid?> { [leaderboard[0].ParticipantId] = null };
         var handler = CreateHandler();
 
         // Act
-        var act = async () => await handler.Handle(notification);
+        await handler.Handle(new SaveGameHistoryCommand(Guid.CreateVersion7(), Guid.CreateVersion7(), leaderboard, participantUserIds));
 
         // Assert
-        await act.Should().NotThrowAsync();
-        _loggerMock.Verify(
-            x => x.Log(
-                LogLevel.Warning,
-                It.IsAny<EventId>(),
-                It.IsAny<It.IsAnyType>(),
-                It.IsAny<Exception>(),
-                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-            Times.Once);
+        _identityServiceMock.Verify(
+            x => x.GetEmailsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()), Times.Never);
+        _outboxWriterMock.Verify(x => x.Enqueue(It.IsAny<GameResultsEmailMessage>()), Times.Never);
     }
 }

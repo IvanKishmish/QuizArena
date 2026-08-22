@@ -6,6 +6,8 @@ namespace QuizArena.Domain.Entities;
 
 public sealed class GameHistoryEntry : Entity
 {
+    public Guid GameId { get; private init; }
+
     public Guid QuizSetId { get; private init; }
     public Guid? ParticipantUserId { get; private init; }
     public string DisplayName { get; private init; } = string.Empty;
@@ -17,6 +19,7 @@ public sealed class GameHistoryEntry : Entity
 
     private GameHistoryEntry(Guid id, GameHistoryEntryCreationParams args) : base(id)
     {
+        GameId = args.GameId;
         QuizSetId = args.QuizSetId;
         ParticipantUserId = args.ParticipantUserId;
         DisplayName = args.DisplayName;
@@ -37,6 +40,9 @@ public sealed class GameHistoryEntry : Entity
     private static ErrorOr<Success> ValidateInvariants(GameHistoryEntryCreationParams args)
     {
         var errors = new List<Error>();
+
+        if (args.GameId == Guid.Empty)
+            errors.Add(Error.Validation("GameHistoryEntry.GameIdRequired", "GameId is required"));
 
         if (args.QuizSetId == Guid.Empty)
             errors.Add(Error.Validation("GameHistoryEntry.QuizSetIdRequired", "QuizSetId is required"));

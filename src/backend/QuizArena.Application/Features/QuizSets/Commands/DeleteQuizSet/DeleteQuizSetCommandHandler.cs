@@ -29,10 +29,10 @@ public sealed class DeleteQuizSetCommandHandler
             return Error.Validation("QuizSet.NotAvailableToDelete", "You can't delete the public quiz set.");
         
         context.QuizSets.Remove(quizSet);
-
-        await questionStore.DeleteByQuizSetIdAsync(quizSet.Id, ct);
         
         await context.SaveChangesAsync(ct);
+
+        await questionStore.DeleteByQuizSetIdAsync(quizSet.Id, ct);
 
         return Result.Deleted;
     }

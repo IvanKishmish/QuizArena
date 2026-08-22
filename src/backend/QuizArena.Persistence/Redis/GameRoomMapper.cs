@@ -18,7 +18,8 @@ public static class GameRoomMapper
             CurrentQuestionStartedAt = gameRoom.CurrentQuestionStartedAt,
             Participants = gameRoom.Participants.Select(p => p.ToSnapshot()).ToList(),
             StartedAt = gameRoom.StartedAt,
-            FinishedAt = gameRoom.FinishedAt
+            FinishedAt = gameRoom.FinishedAt,
+            Version = gameRoom.Version
         };
     
     private static ParticipantSnapshot ToSnapshot(this Participant participant)
@@ -32,7 +33,8 @@ public static class GameRoomMapper
             AvailablePowerUps = participant.AvailablePowerUps,
             ActiveDoubleOrNothing = participant.ActiveDoubleOrNothing,
             IsFrozen = participant.IsFrozen,
-            FrozenUntil = participant.FrozenUntil
+            FrozenUntil = participant.FrozenUntil,
+            AnsweredQuestionIds = participant.AnsweredQuestionIds.ToList()
         };
     
     public static GameRoom ToDomain(this GameRoomSnapshot snapshot)
@@ -49,7 +51,8 @@ public static class GameRoomMapper
             snapshot.CurrentQuestionStartedAt,
             participants,
             snapshot.StartedAt,
-            snapshot.FinishedAt);
+            snapshot.FinishedAt,
+            snapshot.Version);
     }
 
     private static Participant ToDomain(this ParticipantSnapshot snapshot)
@@ -61,6 +64,7 @@ public static class GameRoomMapper
             snapshot.AvailablePowerUps,
             snapshot.ActiveDoubleOrNothing,
             snapshot.IsFrozen,
-            snapshot.FrozenUntil));
+            snapshot.FrozenUntil,
+            snapshot.AnsweredQuestionIds));
     
 }

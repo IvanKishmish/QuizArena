@@ -35,7 +35,10 @@ public sealed class CreateGameRoomCommandHandler(
         if (gameRoomResult.IsError)
             return gameRoomResult.Errors;
         
-        await gameRoomStore.SaveAsync(gameRoomResult.Value, ct);
+        var saved = await gameRoomStore.SaveAsync(gameRoomResult.Value, ct);
+
+        if (!saved)
+            return Error.Conflict("GameRoom.RoomCodeCollision", "Generated room code was already taken, please retry.");
 
         return roomCode;
     }
