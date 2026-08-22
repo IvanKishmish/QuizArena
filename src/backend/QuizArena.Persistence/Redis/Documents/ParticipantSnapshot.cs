@@ -13,4 +13,6 @@ public sealed record ParticipantSnapshot
     public required PowerUpType? ActiveDoubleOrNothing { get; init; }
     public required bool IsFrozen { get; init; }
     public required DateTimeOffset? FrozenUntil { get; init; }
+
+    public required List<Guid> AnsweredQuestionIds { get; init; }
 }
